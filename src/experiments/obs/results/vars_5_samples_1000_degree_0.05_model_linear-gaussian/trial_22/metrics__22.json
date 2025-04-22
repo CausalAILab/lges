@@ -1,0 +1,41 @@
+{
+    "Without CIs": {
+        "inserts_eval": 120,
+        "deletes_eval": 42,
+        "turns_eval": 6,
+        "inserts_actual": 9,
+        "deletes_actual": 0,
+        "turns_actual": 0,
+        "cis_eval": 0,
+        "score": 356.7073459676805,
+        "time": 0.022208213806152344,
+        "ops_eval": 168,
+        "ops_actual": 9
+    },
+    "With CI Oracle": {
+        "inserts_eval": 120,
+        "deletes_eval": 0,
+        "turns_eval": 6,
+        "inserts_actual": 9,
+        "deletes_actual": 0,
+        "turns_actual": 0,
+        "cis_eval": 40,
+        "score": 356.7073459676805,
+        "time": 0.029771804809570312,
+        "ops_eval": 126,
+        "ops_actual": 9
+    },
+    "With CI Test": {
+        "inserts_eval": 120,
+        "deletes_eval": 0,
+        "turns_eval": 6,
+        "inserts_actual": 9,
+        "deletes_actual": 0,
+        "turns_actual": 0,
+        "cis_eval": 40,
+        "score": 356.7073459676805,
+        "time": 0.023903608322143555,
+        "ops_eval": 126,
+        "ops_actual": 9
+    }
+}

@@ -1,0 +1,261 @@
+import numpy as np
+import networkx as nx
+import os
+import json
+import matplotlib.pyplot as plt
+import warnings
+import random
+from sempler.generators import dag_avg_deg
+import sempler
+
+
+
+# Set a random seed for reproducibility
+RANDOM_SEED = 42
+np.random.seed(RANDOM_SEED)
+random.seed(RANDOM_SEED)
+
+METRICS_KEYS = [
+        "edit_distance", "false_positives", "false_negatives",
+        "inserts_eval", "deletes_eval", "turns_eval", "ops_eval",
+        "inserts_actual", "deletes_actual", "turns_actual", "ops_actual",
+        "cis_eval", "score", "time"
+    ]
+
+
+def get_avg_degree_from_density(num_vars, density):
+    """
+    Convert density to average degree.
+    """
+    # Calculate the maximum number of edges
+    max_edges = num_vars * (num_vars - 1) / 2
+
+    # Calculate the average degree from density
+    avg_degree = density * max_edges / num_vars
+
+    return avg_degree
+
+def get_random_dag(num_vars, avg_degree, random_state=RANDOM_SEED):
+    """
+    Generate a random directed acyclic graph (DAG) with the specified number of variables and average degree.
+    """
+    if random_state is not None:
+        np.random.seed(random_state)
+        random.seed(random_state)
+
+    # Generate a random DAG
+    G = dag_avg_deg(num_vars, get_avg_degree_from_density(num_vars, avg_degree), 1, 1,random_state=random_state)
+
+    return G
+
+
+def get_random_data(G, num_samples, model="linear-gaussian", random_state=RANDOM_SEED):
+    """
+    Generate random data based on the given DAG and data type.
+
+    Parameters:
+    - G: The adjacency matrix of the DAG.
+    - num_samples: Number of samples to generate.
+    - data_type: Type of data to generate ("multinomial", "linear-gaussian", "continuous").
+    - random_state: Random seed for reproducibility.
+
+    Returns:
+    - Generated data as a numpy array.
+    """
+
+    if model == "linear-gaussian":
+        try:
+            # Convert warnings to exceptions to catch them
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", category=RuntimeWarning)
+                
+                # Generate random weights and sample data
+                # Weights chosen uniformly in range [-2, -0.5] U [0.5, 2]
+                W = G * np.random.choice([-1, 1], size=G.shape) * np.random.uniform(0.5, 2, G.shape)
+
+                # sample noise means from N(0, 1)
+                noise_means = np.random.normal(0, 1, size=G.shape[0])
+                # sample noise variances from U(0.1, 0.5)
+                noise_variances = np.random.uniform(0.1, 0.5, size=G.shape[0])
+                data = sempler.LGANM(W, noise_means, noise_variances, random_state=random_state).sample(n=num_samples)
+                return data 
+        except RuntimeWarning as e:
+            return []  # Return empty to indicate failure
+    elif model == "multinomial":
+        
+        raise NotImplementedError("Multinomial data generation is not implemented yet.")
+    elif model == "continuous":
+       raise NotImplementedError("Continuous data generation is not implemented yet.")
+    else:
+        raise ValueError(f"Invalid model: {model}. Must be 'multinomial', 'linear-gaussian', or 'continuous'.")
+
+    return data
+
+
+
+class MetricsEvaluator:
+    def __init__(self, settings):
+        self.settings = settings
+        self.metrics_keys = METRICS_KEYS
+        self.total_metrics = {key: {setting: [] for setting in self.settings} for key in self.metrics_keys}
+
+    def eval_ground_truth(self, cpA, estimate, setting):
+        """
+        Evaluate the ground truth by calculating various metrics such as edit distance,
+        false positives, and false negatives for the given settings.
+        Args:
+            cpA (numpy.ndarray): The ground truth cpdag array .
+            estimate (numpy.ndarray): The estimated cpdag array to compare against the ground truth.
+        Updates:
+            self.total_metrics (dict): A dictionary where metrics such as "edit_distance",
+                           "false_positives", and "false_negatives" are updated
+                           for each setting in `self.settings`.
+        Metrics:
+            - Edit Distance: The total number of differing elements between `cpA` and `estimate`.
+            - False Positives: The count of elements where `cpA` is 0 and `estimate` is 1.
+            - False Negatives: The count of elements where `cpA` is 1 and `estimate` is 0.
+        """
+        
+        # Calculate edit distance
+        edit_distance = np.sum(cpA != estimate)
+        self.total_metrics["edit_distance"][setting].append(edit_distance)
+
+        # Calculate false positives and false negatives
+        false_positives = np.sum((cpA == 0) & (estimate == 1))
+        false_negatives = np.sum((cpA == 1) & (estimate == 0))
+        self.total_metrics["false_positives"][setting].append(false_positives)
+        self.total_metrics["false_negatives"][setting].append(false_negatives)
+
+    def append_metrics(self, setting, metrics):
+        """
+        Append the metrics for a specific setting to the total metrics dictionary.
+        Args:
+            setting (str): The name of the setting (e.g., "Without CIs", "With CI Oracle").
+            metrics (dict): A dictionary containing various metrics such as "inserts_eval",
+                            "deletes_eval", "turns_eval", etc.
+        Updates:
+            self.total_metrics (dict): The dictionary where metrics are appended for the specified setting.
+        """
+        print()
+        for metric, val in metrics.items():
+            self.total_metrics[metric][setting].append(val) 
+
+    def summarize(self, display=True):            
+        
+        summary = {key: {setting:  {"mean": 0, "std": 0} for setting in self.settings} for key in self.metrics_keys}
+
+        for setting in self.settings:
+            if display:
+                print(f"{setting}:")
+            for metric in self.metrics_keys:
+                avg_value = np.mean(self.total_metrics[metric][setting])
+                std_value = np.std(self.total_metrics[metric][setting])
+                summary[metric][setting]["mean"] = avg_value
+                summary[metric][setting]["std"] = std_value
+                if display:
+                    print(f"  {metric.replace('_', ' ').title()}: {avg_value:.2f} ± {std_value:.2f}")
+
+        return summary
+    
+
+
+def plot_obs_no_prior():
+    """
+    Plot the results of observational data without prior knowledge.
+    Assumes the results are stored in the 'obs/results' directory.
+    """
+
+def extract_params_from_dir(dir):
+    """
+    Extract experimental parameters from a formatted string.
+    Args:
+        format_string (str): The formatted string to extract information from.
+                             Example: "vars_5_samples_500_degree_0.01_model_linear-gaussian"
+    Returns:
+        dict: A dictionary containing the extracted key-value pairs.
+              Example: {"vars": 5, "samples": 500, "degree": 0.01, "model": "linear-gaussian"}
+    """
+    parts = dir.split("_")
+    params = {}
+    for i in range(0, len(parts), 2):
+        key = parts[i]
+        value = parts[i + 1]
+        try:
+            value = float(value) if "." in value else int(value)
+        except ValueError:
+            pass
+        params[key] = value
+    return params
+
+
+def plot_obs_no_prior(settings):
+
+    save_dir = "obs/plots"
+    os.makedirs(save_dir, exist_ok=True)
+    
+    for metric in METRICS_KEYS:
+        metrics = {setting: [] for setting in settings}
+        for dir in os.listdir("obs/results"):
+            params = extract_params_from_dir(dir)
+
+            # Skip the iteration if the condition is met
+            if not (params["samples"] == 1000 and params["degree"] == 0.05):
+                continue
+            
+            results_path = os.path.join("obs", "results", dir, "results.json")
+            if not os.path.exists(results_path):
+                print(f"File {results_path} does not exist.")
+                continue
+
+            with open(results_path, "r") as f:
+                results = json.load(f)
+
+            for setting in settings:
+                metrics[setting].append((params["vars"], results[metric][setting]))
+        
+        # Plot the metrics with a different line for each setting
+        for setting in settings:
+            sorted_points = sorted(metrics[setting], key=lambda x: x[0])
+            x_vals = [v for v, _ in sorted_points]
+            y_vals = [res["mean"] for _, res in sorted_points]
+            y_errs = [res["std"] for _, res in sorted_points]
+
+            plt.errorbar(
+                x_vals, y_vals, yerr=y_errs,
+                label=setting,
+                marker='o', capsize=5
+            )
+
+        plt.xlabel("Number of Variables")
+        plt.ylabel(metric.replace("_", " ").title())
+        plt.title(f"{metric.replace('_', ' ').title()} vs Number of Variables")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        # Save the figure
+        save_path = os.path.join(save_dir, f"{metric}.png")
+        plt.savefig(save_path)
+
+        plt.close()
+
+
+class CIOracle:
+
+    def __init__(self, A):
+        self.A = nx.DiGraph(A)
+
+        
+    def __call__(self, X, Y, S=[]):
+        """
+        Test if X and Y are separated given Z in the DAG represented by
+        the adjacency matrix A. Makes the instance callable.
+        """
+        key = (frozenset({X}), frozenset({Y}), frozenset(S))
+        return nx.d_separated(self.A, {X}, {Y}, set(S))
+    
+
+if __name__ == '__main__':
+    settings = ["Without CIs", "With CI Oracle", "With CI Test"]
+    plot_obs_no_prior(settings)
