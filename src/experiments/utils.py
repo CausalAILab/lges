@@ -7,8 +7,7 @@ import warnings
 import random
 from sempler.generators import dag_avg_deg
 import sempler
-from ges.ges.utils import dag_to_cpdag
-
+from src.scm.ctm import CTM
 
 
 # Set a random seed for reproducibility
@@ -84,8 +83,10 @@ def get_random_data(G, num_samples, model="linear-gaussian", random_state=RANDOM
         except RuntimeWarning as e:
             return []  # Return empty to indicate failure
     elif model == "multinomial":
-        
-        raise NotImplementedError("Multinomial data generation is not implemented yet.")
+        # Generate random multinomial data
+        ctm = CTM(G, random_state=random_state)
+        data = ctm.sample(num_samples)
+        return data
     elif model == "continuous":
        raise NotImplementedError("Continuous data generation is not implemented yet.")
     else:
