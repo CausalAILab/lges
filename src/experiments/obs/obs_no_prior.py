@@ -48,17 +48,33 @@ if __name__ == "__main__":
 
     # Parse command-line arguments for experimental parameters
     parser = argparse.ArgumentParser(description="Run experiments with specified parameters.")
-    parser.add_argument("-p", "--num_vars", type=str, choices=list(num_vars_list.keys()), default="medium", help=f"Size of graphs for the experiment (options: {', '.join(num_vars_list.keys())}). Default: medium.")
-    parser.add_argument("-n", "--num_samples", type=str, choices=list(num_samples_list.keys()), default="medium", help=f"Size of sample for the experiment (options: {', '.join(num_samples_list.keys())}). Default: medium.")
-    parser.add_argument("-d", "--avg_degree", type=str, choices=list(avg_degree_list.keys()), default="medium", help=f"Graph density for the experiment (options: {', '.join(avg_degree_list.keys())}). Default: medium.")
+    parser.add_argument("-p", "--num_vars", type=str, help=f"Size of graphs for the experiment (options: {', '.join(num_vars_list.keys())} or a single integer). Default: medium.")
+    parser.add_argument("-n", "--num_samples", type=str, help=f"Size of sample for the experiment (options: {', '.join(num_samples_list.keys())} or a single integer). Default: medium.")
+    parser.add_argument("-d", "--avg_degree", type=str, help=f"Graph density for the experiment (options: {', '.join(avg_degree_list.keys())} or a single float). Default: medium.")
     parser.add_argument("-g", "--num_graphs", type=int, default=NUM_GRAPHS, help=f"Number of graphs for the experiment (default: {NUM_GRAPHS}).")
+
+    # Parse arguments
+    args = parser.parse_args()
+
+    # Handle single number inputs for num_vars, num_samples, and avg_degree
     parser.add_argument("-m", "--model", choices=["multinomial", "linear-gaussian"], default="linear-gaussian", help="Model type for data generation (options: multinomial, linear-gaussian). Default: linear-gaussian.")
     args = parser.parse_args()
 
-   
-    num_vars = num_vars_list[args.num_vars]
-    num_samples = num_samples_list[args.num_samples]
-    avg_degree = avg_degree_list[args.avg_degree]
+    try:
+        num_vars = [int(args.num_vars)] if args.num_vars.isdigit() else num_vars_list[args.num_vars]
+    except KeyError:
+        raise ValueError(f"Invalid value for num_vars: {args.num_vars}. Must be one of {list(num_vars_list.keys())} or a single integer.")
+
+    try:
+        num_samples = [int(args.num_samples)] if args.num_samples.isdigit() else num_samples_list[args.num_samples]
+    except KeyError:
+        raise ValueError(f"Invalid value for num_samples: {args.num_samples}. Must be one of {list(num_samples_list.keys())} or a single integer.")
+
+    try:
+        avg_degree = [float(args.avg_degree)] if args.avg_degree.replace('.', '', 1).isdigit() else avg_degree_list[args.avg_degree]
+    except KeyError:
+        raise ValueError(f"Invalid value for avg_degree: {args.avg_degree}. Must be one of {list(avg_degree_list.keys())} or a single float.")
+    
     num_graphs = args.num_graphs
     model = args.model
 
@@ -108,7 +124,7 @@ if __name__ == "__main__":
                         G = np.load(dag_file_path)
                     else:
                         # Generate a random DAG
-                        G = get_random_dag(p, 2, random_state=RANDOM_SEED + i)
+                        G = get_random_dag(p, d, random_state=RANDOM_SEED + i)
                         np.save(dag_file_path, G)
 
                     if os.path.exists(data_file_path):
