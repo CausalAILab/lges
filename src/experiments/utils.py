@@ -222,7 +222,7 @@ def plot_obs_no_prior(settings):
             params = extract_params_from_dir(dir)
 
             # Skip the iteration if the condition is met
-            if not (params["samples"] == 1000 and params["degree"] == 0.05):
+            if not (params["samples"] == 500 and params["degree"] == 0.05):
                 continue
             
             results_path = os.path.join("obs", "results", dir, "results.json")

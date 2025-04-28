@@ -1,0 +1,198 @@
+{
+    "edit_distance": {
+        "Without CIs": {
+            "mean": 0.66,
+            "std": 0.992169340384997
+        },
+        "With CI Oracle": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Test": {
+            "mean": 0.62,
+            "std": 0.9775479527879949
+        }
+    },
+    "false_positives": {
+        "Without CIs": {
+            "mean": 0.52,
+            "std": 0.6997142273814361
+        },
+        "With CI Oracle": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Test": {
+            "mean": 0.5,
+            "std": 0.7
+        }
+    },
+    "false_negatives": {
+        "Without CIs": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Oracle": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Test": {
+            "mean": 0.0,
+            "std": 0.0
+        }
+    },
+    "inserts_eval": {
+        "Without CIs": {
+            "mean": 261.76,
+            "std": 140.00436564621833
+        },
+        "With CI Oracle": {
+            "mean": 3.58,
+            "std": 5.257718136226019
+        },
+        "With CI Test": {
+            "mean": 15.6,
+            "std": 14.039943019827396
+        }
+    },
+    "deletes_eval": {
+        "Without CIs": {
+            "mean": 1.58,
+            "std": 1.250439922587247
+        },
+        "With CI Oracle": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Test": {
+            "mean": 0.0,
+            "std": 0.0
+        }
+    },
+    "turns_eval": {
+        "Without CIs": {
+            "mean": 0.74,
+            "std": 1.2619033243477886
+        },
+        "With CI Oracle": {
+            "mean": 0.18,
+            "std": 0.6225752966509353
+        },
+        "With CI Test": {
+            "mean": 0.68,
+            "std": 1.2237646832622684
+        }
+    },
+    "ops_eval": {
+        "Without CIs": {
+            "mean": 264.08,
+            "std": 142.26986188226937
+        },
+        "With CI Oracle": {
+            "mean": 3.76,
+            "std": 5.808820878629328
+        },
+        "With CI Test": {
+            "mean": 16.28,
+            "std": 15.0040527858309
+        }
+    },
+    "inserts_actual": {
+        "Without CIs": {
+            "mean": 1.58,
+            "std": 1.250439922587247
+        },
+        "With CI Oracle": {
+            "mean": 1.06,
+            "std": 0.9881295461628501
+        },
+        "With CI Test": {
+            "mean": 1.56,
+            "std": 1.2354756169184398
+        }
+    },
+    "deletes_actual": {
+        "Without CIs": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Oracle": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Test": {
+            "mean": 0.0,
+            "std": 0.0
+        }
+    },
+    "turns_actual": {
+        "Without CIs": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Oracle": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Test": {
+            "mean": 0.0,
+            "std": 0.0
+        }
+    },
+    "ops_actual": {
+        "Without CIs": {
+            "mean": 1.58,
+            "std": 1.250439922587247
+        },
+        "With CI Oracle": {
+            "mean": 1.06,
+            "std": 0.9881295461628501
+        },
+        "With CI Test": {
+            "mean": 1.56,
+            "std": 1.2354756169184398
+        }
+    },
+    "cis_eval": {
+        "Without CIs": {
+            "mean": 0.0,
+            "std": 0.0
+        },
+        "With CI Oracle": {
+            "mean": 98.64,
+            "std": 8.272266920258316
+        },
+        "With CI Test": {
+            "mean": 102.7,
+            "std": 10.25329215423027
+        }
+    },
+    "score": {
+        "Without CIs": {
+            "mean": 767.5015985851599,
+            "std": 358.3607448423757
+        },
+        "With CI Oracle": {
+            "mean": 767.0874283604722,
+            "std": 358.43774195940046
+        },
+        "With CI Test": {
+            "mean": 767.4984276520564,
+            "std": 358.3602719934359
+        }
+    },
+    "time": {
+        "Without CIs": {
+            "mean": 0.03208110809326172,
+            "std": 0.0156366613488426
+        },
+        "With CI Oracle": {
+            "mean": 0.028067307472229006,
+            "std": 0.01748848174223191
+        },
+        "With CI Test": {
+            "mean": 0.010828070640563965,
+            "std": 0.004926761768941773
+        }
+    }
+}
