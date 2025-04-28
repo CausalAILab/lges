@@ -52,11 +52,6 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num_samples", type=str, help=f"Size of sample for the experiment (options: {', '.join(num_samples_list.keys())} or a single integer). Default: medium.")
     parser.add_argument("-d", "--avg_degree", type=str, help=f"Graph density for the experiment (options: {', '.join(avg_degree_list.keys())} or a single float). Default: medium.")
     parser.add_argument("-g", "--num_graphs", type=int, default=NUM_GRAPHS, help=f"Number of graphs for the experiment (default: {NUM_GRAPHS}).")
-
-    # Parse arguments
-    args = parser.parse_args()
-
-    # Handle single number inputs for num_vars, num_samples, and avg_degree
     parser.add_argument("-m", "--model", choices=["multinomial", "linear-gaussian"], default="linear-gaussian", help="Model type for data generation (options: multinomial, linear-gaussian). Default: linear-gaussian.")
     args = parser.parse_args()
 

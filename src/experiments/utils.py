@@ -7,6 +7,7 @@ import warnings
 import random
 from sempler.generators import dag_avg_deg
 import sempler
+from ges.ges.utils import dag_to_cpdag
 
 
 
@@ -44,7 +45,8 @@ def get_random_dag(num_vars, avg_degree, random_state=RANDOM_SEED):
         random.seed(random_state)
 
     # Generate a random DAG
-    G = dag_avg_deg(num_vars, get_avg_degree_from_density(num_vars, avg_degree), 1, 1,random_state=random_state)
+    avg_degree = get_avg_degree_from_density(num_vars, avg_degree)
+    G = dag_avg_deg(num_vars, avg_degree, 1, 1,random_state=random_state)
 
     return G
 
@@ -116,13 +118,41 @@ class MetricsEvaluator:
             - False Negatives: The count of elements where `cpA` is 1 and `estimate` is 0.
         """
         
-        # Calculate edit distance
-        edit_distance = np.sum(cpA != estimate)
-        self.total_metrics["edit_distance"][setting].append(edit_distance)
+        n = estimate.shape[0]
+    
+        # 1. Skeletons (undirected structure)
+        skeleton_estimate = estimate + estimate.T
+        skeleton_cpA = cpA + cpA.T
+        skeleton_estimate[skeleton_estimate == 2] = 1
+        skeleton_cpA[skeleton_cpA == 2] = 1
+        
+        # Difference of skeletons
+        diff_skeletons = skeleton_estimate - skeleton_cpA
 
-        # Calculate false positives and false negatives
-        false_positives = np.sum((cpA == 0) & (estimate == 1))
-        false_negatives = np.sum((cpA == 1) & (estimate == 0))
+        # False positives: extra edges in estimate not in cpA
+        superfluous = np.where(diff_skeletons > 0)
+        false_positives = len(superfluous[0]) // 2
+
+        estimate[superfluous] = 0  # Remove extra edges from estimate
+
+        # False negatives: missing edges
+        missing = np.where(diff_skeletons < 0)
+        false_negatives = len(missing[0]) // 2
+
+        estimate[missing] = cpA[missing]  # Add missing edges to estimate
+
+        # Now skeletons match, compare orientations
+        d = np.abs(estimate - cpA)
+
+        wrong_orientations = np.sum((d + d.T) > 0) // 2
+
+
+        # Total SHD
+        edit_distance = false_positives + false_negatives + wrong_orientations
+        print(f"False positives: {false_positives}, False negatives: {false_negatives}, Wrong orientations: {wrong_orientations}, Edit distance: {edit_distance}")
+
+
+        self.total_metrics["edit_distance"][setting].append(edit_distance)
         self.total_metrics["false_positives"][setting].append(false_positives)
         self.total_metrics["false_negatives"][setting].append(false_negatives)
 
@@ -157,13 +187,6 @@ class MetricsEvaluator:
 
         return summary
     
-
-
-def plot_obs_no_prior():
-    """
-    Plot the results of observational data without prior knowledge.
-    Assumes the results are stored in the 'obs/results' directory.
-    """
 
 def extract_params_from_dir(dir):
     """
