@@ -25,8 +25,8 @@ random.seed(RANDOM_SEED)
 # Experimental parameters
 num_vars_list = {"small": [5, 10, 15, 20],
                  "medium": [25, 35, 50],
-                 "large": [75, 100],
-                 "very_large": [150, 250, 500, 750, 1000]
+                 "large": [75, 100, 150],
+                 "very_large": [250, 500, 750, 1000]
                 }
 num_samples_list = {"small": [500,1000],
                     "medium": [10000, 50000],
@@ -150,7 +150,10 @@ if __name__ == "__main__":
                         lock_file.write("Experiment in progress")
                     try:
                         # Run GES
-                        score_class = ges.scores.GaussObsL0Pen(data)
+                        if model == "linear-gaussian":
+                            score_class = ges.scores.GaussObsL0Pen(data)
+                        elif model == "multinomial":
+                            score_class = ges.scores.DiscreteObsL0Pen(data)
                         ci_oracle = CIOracle(G)
                         ci_test = CIT(data, ci_test_type[model])
                         ci = {"Without CIs": None, "With CI Oracle": ci_oracle, "With CI Test": ci_test}

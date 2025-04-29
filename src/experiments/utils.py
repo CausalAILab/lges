@@ -8,6 +8,7 @@ import random
 from sempler.generators import dag_avg_deg
 import sempler
 from src.scm.ctm import CTM
+import time 
 
 
 # Set a random seed for reproducibility
@@ -223,7 +224,7 @@ def plot_obs_no_prior(settings):
             params = extract_params_from_dir(dir)
 
             # Skip the iteration if the condition is met
-            if not (params["samples"] == 500 and params["degree"] == 0.05):
+            if not (params["samples"] == 500 and params["degree"] == 0.01):
                 continue
             
             results_path = os.path.join("obs", "results", dir, "results.json")
@@ -269,6 +270,7 @@ class CIOracle:
 
     def __init__(self, A):
         self.A = nx.DiGraph(A)
+        self.dsep_total_time = 0
 
         
     def __call__(self, X, Y, S=[]):
@@ -276,9 +278,11 @@ class CIOracle:
         Test if X and Y are separated given Z in the DAG represented by
         the adjacency matrix A. Makes the instance callable.
         """
-        key = (frozenset({X}), frozenset({Y}), frozenset(S))
-        return nx.d_separated(self.A, {X}, {Y}, set(S))
-    
+        start = time.time()
+        sep = nx.d_separated(self.A, {X}, {Y}, set(S))
+        end = time.time()
+        self.dsep_total_time += end - start
+        return sep
 
 if __name__ == '__main__':
     settings = ["Without CIs", "With CI Oracle", "With CI Test"]

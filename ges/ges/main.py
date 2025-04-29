@@ -233,6 +233,12 @@ def fit(
     last_log_time = time.time()
     print("Starting GES. Initial score: %0.4f" % total_score)
     while True:
+        # Check for timeout
+        if time.time() - start > 3600:  # 1 hour = 3600 seconds
+            print("Algorithm timed out after 1 hour.")
+            metrics["time"] = 3600
+            return A, metrics
+
         last_total_score = total_score
         for phase in phases:
             if phase == "forward":
@@ -273,7 +279,12 @@ def fit(
     metrics["ops_actual"] = metrics["inserts_actual"] + metrics["deletes_actual"] + metrics["turns_actual"]
     metrics["cis_eval"] = len(metrics["cis_eval"])
     metrics["score"] = total_score
-    metrics["time"] = end - start
+
+    if isinstance(ci, CIOracle):
+        # subtract time taken for oracle 
+        metrics["time"] = end - start - ci.dsep_total_time
+    else:
+        metrics["time"] = end - start
     return A, metrics
 
 
