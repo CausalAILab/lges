@@ -51,7 +51,7 @@ def get_random_dag(num_vars, avg_degree, random_state=RANDOM_SEED):
     return G
 
 
-def get_random_data(G, num_samples, model="linear-gaussian", random_state=RANDOM_SEED):
+def get_random_data(G, num_samples, model="linear-gaussian", interventions=[{}], random_state=RANDOM_SEED):
     """
     Generate random data based on the given DAG and data type.
 
@@ -74,12 +74,12 @@ def get_random_data(G, num_samples, model="linear-gaussian", random_state=RANDOM
                 # Generate random weights and sample data
                 # Weights chosen uniformly in range [-2, -0.5] U [0.5, 2]
                 W = G * np.random.choice([-1, 1], size=G.shape) * np.random.uniform(0.5, 2, G.shape)
-
                 # sample noise means from N(0, 1)
                 noise_means = np.random.normal(0, 1, size=G.shape[0])
                 # sample noise variances from U(0.1, 0.5)
                 noise_variances = np.random.uniform(0.1, 0.5, size=G.shape[0])
-                data = sempler.LGANM(W, noise_means, noise_variances, random_state=random_state).sample(n=num_samples)
+                sampler = sempler.LGANM(W, noise_means, noise_variances, random_state=random_state)
+                data = [sampler.sample(n=num_samples, do_interventions=i) for i in interventions]
                 return data 
         except RuntimeWarning as e:
             return []  # Return empty to indicate failure

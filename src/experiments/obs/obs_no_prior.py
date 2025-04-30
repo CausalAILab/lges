@@ -89,10 +89,10 @@ if __name__ == "__main__":
                 key = f"vars_{p}_samples_{n}_degree_{d}_model_{model}"
 
                 # Check if results.json already exists for the current experiment
-                results_file_path = os.path.join(key, "results.json")
-                if os.path.exists(results_file_path):
-                    print(f"Results already exist for key: {key}. Skipping experiment...")
-                    continue
+                # results_file_path = os.path.join(key, "results.json")
+                # if os.path.exists(results_file_path):
+                #     print(f"Results already exist for key: {key}. Skipping experiment...")
+                #     continue
 
                 # m = MetricsEvaluator(settings)
 
@@ -158,29 +158,33 @@ if __name__ == "__main__":
                         ci_test = CIT(data, ci_test_type[model])
                         ci = {"Without CIs": None, "With CI Oracle": ci_oracle, "With CI Test": ci_test}
 
-                        metrics = {setting: dict() for setting in settings}
+
                         metrics_file_path = os.path.join(trial_dir, f"metrics__{i}.json")
+                        if os.path.exists(metrics_file_path):
+                            print(f"Metrics already exist for key: {key}. Skipping experiment...")
+                            continue
 
                         for setting in settings:
-
+                            metrics_file_path = os.path.join(trial_dir, f"metrics_{setting.replace(' ', '_').lower()}_{i}.json")
                             estimate_file_path = os.path.join(trial_dir, f"estimate_{setting.replace(' ', '_').lower()}_{i}.npy")
+                            
+                            if os.path.exists(estimate_file_path) != os.path.exists(metrics_file_path):
+                                if os.path.exists(estimate_file_path):
+                                    os.remove(estimate_file_path)
+                                if os.path.exists(metrics_file_path):
+                                    os.remove(metrics_file_path)
+            
+                            
                             if os.path.exists(estimate_file_path) and os.path.exists(metrics_file_path):
                                 print(f"Estimate and metrics already exist for setting: {setting}, graph: {i}. Skipping...")
-                                estimate = np.load(estimate_file_path)
-                                with open(metrics_file_path, "r") as metrics_file:
-                                    metrics[setting] = json.load(metrics_file)[setting]
-                            else:
-                                # Fit the model with the specified CI setting
-                                print(f"Fitting model for setting: {setting}, graph: {i}")
-                                estimate, metrics[setting] = ges.fit(score_class, ci=ci[setting])
-                                # Save the estimate to a file
-                                np.save(estimate_file_path, estimate)
+                                continue
 
-                            # m.eval_ground_truth(utils.dag_to_cpdag(G), estimate, setting)
-                            # m.append_metrics(setting, metrics[setting])
-
-
-                        if not os.path.exists(metrics_file_path):
+                            # Fit the model with the specified CI setting
+                            print(f"Fitting model for setting: {setting}, graph: {i}")
+                            estimate, metrics = ges.fit(score_class, ci=ci[setting])
+                            
+                            # Save the estimate and metrics to a file
+                            np.save(estimate_file_path, estimate)
                             with open(metrics_file_path, "w") as metrics_file:
                                 json.dump(metrics, metrics_file, indent=4)
 
