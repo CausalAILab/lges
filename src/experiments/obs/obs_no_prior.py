@@ -94,7 +94,7 @@ if __name__ == "__main__":
                     print(f"Results already exist for key: {key}. Skipping experiment...")
                     continue
 
-                m = MetricsEvaluator(settings)
+                # m = MetricsEvaluator(settings)
 
                 # Create a directory for the experiment key
                 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
                         data = np.load(data_file_path)
                     else:
                         # Generate random data
-                        data = get_random_data(G, n, model, random_state=RANDOM_SEED + i)
+                        data = get_random_data(G, n, model, random_state=RANDOM_SEED + i)[0]
                         if len(data) == 0:
                             print(f"Failed to generate data for key: {key}. Skipping experiment...")
                             # Log the error to an error file
@@ -163,25 +163,29 @@ if __name__ == "__main__":
 
                         for setting in settings:
 
-                            # Check if estimate and metrics already exist for the current setting
                             estimate_file_path = os.path.join(trial_dir, f"estimate_{setting.replace(' ', '_').lower()}_{i}.npy")
-
                             if os.path.exists(estimate_file_path) and os.path.exists(metrics_file_path):
                                 print(f"Estimate and metrics already exist for setting: {setting}, graph: {i}. Skipping...")
-                                continue
-                            
-                            # Fit the model with the specified CI setting
-                            print(f"Fitting model for setting: {setting}, graph: {i}")
-                            estimate, s_metrics = ges.fit(score_class, ci=ci[setting])
-                            # Save the estimate and metrics to files
-                            np.save(estimate_file_path, estimate)
-                            metrics[setting] = s_metrics
-                            m.eval_ground_truth(utils.dag_to_cpdag(G), estimate, setting)
-                            m.append_metrics(setting, s_metrics)
+                                estimate = np.load(estimate_file_path)
+                                with open(metrics_file_path, "r") as metrics_file:
+                                    metrics[setting] = json.load(metrics_file)[setting]
+                            else:
+                                # Fit the model with the specified CI setting
+                                print(f"Fitting model for setting: {setting}, graph: {i}")
+                                estimate, metrics[setting] = ges.fit(score_class, ci=ci[setting])
+                                # Save the estimate to a file
+                                np.save(estimate_file_path, estimate)
+
+                            # m.eval_ground_truth(utils.dag_to_cpdag(G), estimate, setting)
+                            # m.append_metrics(setting, metrics[setting])
 
 
-                        with open(metrics_file_path, "w") as metrics_file:
+                        if not os.path.exists(metrics_file_path):
+                            with open(metrics_file_path, "w") as metrics_file:
                                 json.dump(metrics, metrics_file, indent=4)
+
+
+                        
                     except KeyboardInterrupt:
                         # Remove the lock file if a keyboard interrupt occurs
                         if os.path.exists(lock_file_path):
@@ -196,10 +200,10 @@ if __name__ == "__main__":
 
                     
                 
-                results = m.summarize()
-                # Save the summary to a file
-                with open(results_file_path, "w") as results_file:
-                    json.dump(results, results_file, indent=4)
+                # results = m.summarize()
+                # # Save the summary to a file
+                # with open(results_file_path, "w") as results_file:
+                #     json.dump(results, results_file, indent=4)
                  
                 print("Completed experiment for:", key)
 
