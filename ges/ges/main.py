@@ -396,8 +396,7 @@ def backward_step(A, cache, metrics, debug=0,  ci=None):
     # For each edge, enumerate and score all valid operators
     valid_operators = []
     print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None
-    print("edge candidates", edge_candidates)
-    minimal = False
+    minimal = True
     if ci: # pruning mode
         # check if graph is minimal i-map
         for x, y in edge_candidates:
