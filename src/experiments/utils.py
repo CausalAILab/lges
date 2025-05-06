@@ -96,6 +96,42 @@ def get_random_data(G, num_samples, model="linear-gaussian", interventions=[{}],
     return data
 
 
+def cpdag_shd(target, estimate):
+    # 1. Skeletons (undirected structure)
+
+    estimate_copy = estimate.copy()
+
+    skeleton_estimate = estimate + estimate.T
+    skeleton_target = target + target.T
+    skeleton_estimate[skeleton_estimate == 2] = 1
+    skeleton_target[skeleton_target == 2] = 1
+    
+    # Difference of skeletons
+    diff_skeletons = skeleton_estimate - skeleton_target
+
+    # False positives: extra edges in estimate not in cpA
+    superfluous = np.where(diff_skeletons > 0)
+    false_positives = len(superfluous[0]) // 2
+
+    estimate_copy[superfluous] = 0  # Remove extra edges from estimate
+
+    # False negatives: missing edges
+    missing = np.where(diff_skeletons < 0)
+    false_negatives = len(missing[0]) // 2
+
+    estimate_copy[missing] = target[missing]  # Add missing edges to estimate
+
+    # Now skeletons match, compare orientations
+    d = np.abs(estimate_copy - target)
+
+    wrong_orientations = np.sum((d + d.T) > 0) // 2
+
+
+    # Total SHD
+    edit_distance = false_positives + false_negatives + wrong_orientations
+    
+    return edit_distance
+
 
 class MetricsEvaluator:
     def __init__(self, settings):

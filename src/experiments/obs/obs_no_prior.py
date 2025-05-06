@@ -182,7 +182,10 @@ if __name__ == "__main__":
 
                             # Fit the model with the specified CI setting
                             print(f"Fitting model for setting: {setting}, graph: {i}")
-                            estimate, metrics = ges.fit(score_class, ci=ci[setting], prune=True if "Prune" in setting else False)
+                            prune = True if "Prune" in setting else False
+                            if prune:
+                                print("pruning is enabled in obs_no_prior")
+                            estimate, metrics = ges.fit(score_class, ci=ci[setting], prune=prune)
                             
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)

@@ -181,7 +181,7 @@ def plot_obs_no_prior():
 
         plt.xlabel("Number of Nodes")
         plt.ylabel(metric.capitalize())
-        plt.yscale("log")
+        # plt.yscale("log")
         #  plt.title(f"{metric.capitalize()} vs Number of Nodes")
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()

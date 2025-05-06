@@ -70,14 +70,6 @@ from src.experiments.utils import CIOracle
 ALPHA = 0.05
 
 
-# num_inserts_eval = 0
-# num_deletes_eval = 0
-# num_turns_eval = 0
-# num_inserts_actual = 0
-# num_deletes_actual = 0
-# num_turns_actual = 0
-# cis_eval = set()
-
 def fit_bic(
     data, A0=None, phases=["forward", "backward", "turning"], ci=None, iterate=False, debug=0
 ):
@@ -163,13 +155,6 @@ def fit(
     debug=0,
     prune=False,
 ):
-    # global num_inserts_eval, num_deletes_eval, num_turns_eval, num_inserts_actual, num_deletes_actual, num_turns_actual, cis_eval
-    # num_inserts_eval = 0
-    # num_deletes_eval = 0
-    # num_turns_eval = 0
-    # num_inserts_actual = 0
-    # num_deletes_actual = 0
-    # num_turns_actual = 0
     """Run GES using a user defined score.
 
     Parameters
@@ -256,7 +241,7 @@ def fit(
                 if time.time() - last_log_time > 30:
                     print("Total score: %0.4f" % total_score)
                     last_log_time = time.time()
-                score_change, new_A = fun(A,  score_class, metrics, max(0, debug - 1), ci=ci)
+                score_change, new_A = fun(A,  score_class, metrics, max(0, debug - 1), ci=ci, prune=prune)
                 if score_change > 1e-6:
                     if fun == forward_step:
                         metrics["inserts_actual"] += 1
@@ -324,7 +309,7 @@ def forward_step(A, cache, metrics, debug=0, ci=None, prune=False):
     edge_candidates = list(zip(fro, to))
     # For each edge, enumerate and score all valid operators
     valid_operators = []
-    print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None
+    print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None 
     for x, y in edge_candidates:
         if ci:
             key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
@@ -438,7 +423,7 @@ def backward_step(A, cache, metrics, debug=0,  ci=None, prune=False):
         return score, new_A
 
 
-def turning_step(A, cache, metrics, debug=0,  ci=None):
+def turning_step(A, cache, metrics, debug=0,  ci=None, prune=False):
     """
     Scores all valid turn operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -692,6 +677,8 @@ def score_valid_insert_operators(x, y, A, cache, debug=0, prune=False):
                 found_lower_scoring = True
                 break
     # Return all the valid operators
+
+
     return valid_operators, found_lower_scoring
 
 
