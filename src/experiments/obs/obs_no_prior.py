@@ -73,7 +73,7 @@ if __name__ == "__main__":
     num_graphs = args.num_graphs
     model = args.model
 
-    settings = ["Without CIs", "With CI Oracle", "With CI Test"]
+    settings = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
     
 
@@ -156,7 +156,8 @@ if __name__ == "__main__":
                             score_class = ges.scores.DiscreteObsL0Pen(data)
                         ci_oracle = CIOracle(G)
                         ci_test = CIT(data, ci_test_type[model])
-                        ci = {"Without CIs": None, "With CI Oracle": ci_oracle, "With CI Test": ci_test}
+                        ci = {"Without CIs": None, "With CI Oracle": ci_oracle, 
+                              "With CI Test": ci_test, "Prune With CI Test": ci_test}
 
 
                         metrics_file_path = os.path.join(trial_dir, f"metrics__{i}.json")
@@ -181,7 +182,7 @@ if __name__ == "__main__":
 
                             # Fit the model with the specified CI setting
                             print(f"Fitting model for setting: {setting}, graph: {i}")
-                            estimate, metrics = ges.fit(score_class, ci=ci[setting])
+                            estimate, metrics = ges.fit(score_class, ci=ci[setting], prune=True if "Prune" in setting else False)
                             
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)

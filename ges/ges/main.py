@@ -161,6 +161,7 @@ def fit(
     iterate=False,
     ci=None,
     debug=0,
+    prune=False,
 ):
     # global num_inserts_eval, num_deletes_eval, num_turns_eval, num_inserts_actual, num_deletes_actual, num_turns_actual, cis_eval
     # num_inserts_eval = 0
@@ -288,7 +289,7 @@ def fit(
     return A, metrics
 
 
-def forward_step(A, cache, metrics, debug=0, ci=None):
+def forward_step(A, cache, metrics, debug=0, ci=None, prune=False):
     """
     Scores all valid insert operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -329,18 +330,21 @@ def forward_step(A, cache, metrics, debug=0, ci=None):
             key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
             metrics["cis_eval"].add(key)
             # Check for dependence; insert only if dependent
-            if isinstance(ci, CIOracle) and not ci(x, y, list(utils.pa(y, G))):
-                valid_operators += score_valid_insert_operators(
-                    x, y, A, cache, debug=max(0, debug - 1)
+            if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G))):
+                continue
+            elif ci(x, y, list(utils.pa(y, G))) > ALPHA:
+                continue
+
+        ops, found_lower_scoring = score_valid_insert_operators(
+                    x, y, A, cache, debug=max(0, debug - 1), prune=prune
                 )
-            elif ci(x, y, list(utils.pa(y, G))) <= ALPHA: 
-                valid_operators += score_valid_insert_operators(
-                    x, y, A, cache, debug=max(0, debug - 1)
-                )
-        else:
-            valid_operators += score_valid_insert_operators(
-                x, y, A, cache, debug=max(0, debug - 1)
-            )
+        if prune and found_lower_scoring:
+            # dont consider any x,y inserts
+            metrics["inserts_eval"] += len(ops)
+            continue
+
+        valid_operators += ops
+
     # Pick the edge/operator with the highest score
     if len(valid_operators) == 0:
         print("  No valid insert operators remain") if debug else None
@@ -355,7 +359,7 @@ def forward_step(A, cache, metrics, debug=0, ci=None):
         return score, new_A
 
 
-def backward_step(A, cache, metrics, debug=0,  ci=None):
+def backward_step(A, cache, metrics, debug=0,  ci=None, prune=False):
     """
     Scores all valid delete operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -581,7 +585,7 @@ def insert(x, y, T, A):
     return new_A
 
 
-def score_valid_insert_operators(x, y, A, cache, debug=0):
+def score_valid_insert_operators(x, y, A, cache, debug=0, prune=False):
     """Generate and score all valid insert(x,y,T) operators involving the edge
     x-> y, and all possible subsets T of neighbors of y which
     are NOT adjacent to x.
@@ -623,6 +627,7 @@ def score_valid_insert_operators(x, y, A, cache, debug=0):
         )
     valid_operators = []
     print("    insert(%d,%d) T0=" % (x, y), set(T0)) if debug > 1 else None
+    found_lower_scoring = False
     while len(subsets) > 0:
         print(
             "      len(subsets)=%d, len(valid_operators)=%d"
@@ -682,8 +687,12 @@ def score_valid_insert_operators(x, y, A, cache, debug=0):
             print(
                 "    insert(%d,%d,%s) -> %0.16f" % (x, y, T, new_score - old_score)
             ) if debug else None
+
+            if prune and new_score - old_score < 0:
+                found_lower_scoring = True
+                break
     # Return all the valid operators
-    return valid_operators
+    return valid_operators, found_lower_scoring
 
 
 # --------------------------------------------------------------------
