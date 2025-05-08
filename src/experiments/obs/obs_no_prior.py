@@ -78,7 +78,7 @@ if __name__ == "__main__":
     
 
     # Create a results directory if it doesn't exist
-    results_dir = "results"
+    results_dir = "results_no_prior"
     os.makedirs(results_dir, exist_ok=True)
     # Change the working directory to the results directory
     os.chdir(results_dir)

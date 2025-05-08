@@ -11,98 +11,10 @@ import matplotlib.cm as cm
 import pandas as pd
 import seaborn as sns
 from matplotlib import rcParams
-
-def plot_obs_no_prior_seaborn():
-    base_dir = "./obs/results"
-    output_dir = "./obs/plots_no_prior_seaborn"
-    os.makedirs(output_dir, exist_ok=True)
-
-    ci_types = ["Without CIs", "With CI Oracle", "With CI Test"]
-    all_records = []
-
-    for folder in os.listdir(base_dir):
-        match = re.match(r"vars_(\d+)_samples_(1000|10000)_degree_0.05_model_linear-gaussian", folder)
-        if not match:
-            continue
-        num_nodes = int(match.group(1))
-        folder_path = os.path.join(base_dir, folder)
-
-        for trial in os.listdir(folder_path):
-            trial_match = re.match(r"trial_(\d+)", trial)
-            if not trial_match:
-                continue
-            trial_number = trial_match.group(1)
-            trial_path = os.path.join(folder_path, trial)
-            if not os.path.isdir(trial_path):
-                continue
-
-            dag_file = os.path.join(trial_path, f"dag_{trial_number}.npy")
-            if not os.path.exists(dag_file):
-                continue
-
-            for ci_type in ci_types:
-                key = ci_type.replace(" ", "_").lower()
-                metrics_file = os.path.join(trial_path, f"metrics_{key}_{trial_number}.json")
-                estimate_file = os.path.join(trial_path, f"estimate_{key}_{trial_number}.npy")
-
-                if not os.path.exists(metrics_file) or not os.path.exists(estimate_file):
-                    continue
-
-                dag = np.load(dag_file)
-                estimate = np.load(estimate_file)
-                shd = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
-
-                # SHD metric
-                all_records.append({
-                    "Metric": "SHD",
-                    "Value": shd,
-                    "Num Nodes": num_nodes,
-                    "CI Type": ci_type
-                })
-
-                # Other metrics
-                with open(metrics_file, "r") as f:
-                    metrics = json.load(f)
-                    for metric, value in metrics.items():
-                        all_records.append({
-                            "Metric": metric.capitalize(),
-                            "Value": value,
-                            "Num Nodes": num_nodes,
-                            "CI Type": ci_type
-                        })
-
-    # Convert to DataFrame
-    df = pd.DataFrame(all_records)
-
-    sns.set(style="whitegrid", context="notebook", font_scale=1.2)
-    unique_metrics = df["Metric"].unique()
-
-    for metric in unique_metrics:
-        plt.figure(figsize=(10, 6))
-        metric_df = df[df["Metric"] == metric]
-
-        sns.lineplot(
-            data=metric_df,
-            x="Num Nodes",
-            y="Value",
-            hue="CI Type",
-            style="CI Type",
-            markers=True,
-            dashes=True,
-            errorbar="sd",  # Can be "ci", or "sd", or None
-        )
-
-        plt.title(f"{metric} vs Number of Nodes")
-        plt.ylabel(metric)
-        plt.xlabel("Number of Nodes")
-        # plt.yscale("log")
-        plt.legend(title="CI Type", loc="upper left", bbox_to_anchor=(1.02, 1.0))
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"{metric.lower().replace(' ', '_')}.png"), dpi=300, bbox_inches="tight")
-        plt.close()
+import ges.ges as ges
 
 def plot_obs_no_prior():
-    base_dir = "./obs/results"
+    base_dir = "./obs/results_no_prior"
 
     # Structure: metrics_data[metric][ci_type][num_nodes] = list of values
     metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -128,6 +40,14 @@ def plot_obs_no_prior():
             if not os.path.exists(dag_file):
                 continue
 
+            data_file = os.path.join(trial_path, f"data_{trial_number}.npy")
+            if not os.path.exists(data_file):
+                continue
+
+            dag = np.load(dag_file)
+            data = np.load(data_file)
+            score_class = ges.scores.GaussObsL0Pen(data)
+
             for ci_type in ci_types:
                 metrics_file_path = os.path.join(trial_path, f"metrics_{ci_type.replace(' ', '_').lower()}_{trial_number}.json")
                 estimate_file_path = os.path.join(trial_path, f"estimate_{ci_type.replace(' ', '_').lower()}_{trial_number}.npy")
@@ -135,10 +55,10 @@ def plot_obs_no_prior():
                 if not os.path.exists(metrics_file_path) or not os.path.exists(estimate_file_path):
                     continue
 
-                dag = np.load(dag_file)
                 estimate = np.load(estimate_file_path)
                 shd = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
                 metrics_data["SHD"][ci_type][num_nodes].append(shd)
+                metrics_data["BIC"][ci_type][num_nodes].append(score_class.full_score(estimate))
 
                 with open(metrics_file_path, "r") as f:
                     metrics = json.load(f)
