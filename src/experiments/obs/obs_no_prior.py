@@ -11,6 +11,7 @@ from causallearn.utils.cit import CIT
 import argparse
 import os
 import json
+from sempler.generators import dag_avg_deg
 
 NUM_GRAPHS = 50  # number of graphs
 NUM_VARS = 20
@@ -33,9 +34,14 @@ num_samples_list = {"small": [500,1000],
                     "large": [100000,500000],
                     "very_large": [1000000]
                    }
-avg_degree_list = {"sparse": [0.01, 0.05],
-                    "medium": [0.1, 0.2],
-                    "dense": [0.3, 0.4]
+# avg_degree_list = {"sparse": [0.01, 0.05],
+#                     "medium": [0.1, 0.2],
+#                     "dense": [0.3, 0.4]
+#                    }
+
+avg_degree_list = {"sparse": [2],
+                    "medium": [3],
+                    "dense": [4]
                    }
                     
 NUM_GRAPHS = 50
@@ -111,7 +117,8 @@ if __name__ == "__main__":
                         G = np.load(dag_file_path)
                     else:
                         # Generate a random DAG
-                        G = get_random_dag(p, d, random_state=RANDOM_SEED + i)
+                        #  G = get_random_dag(p, d, random_state=RANDOM_SEED + i)
+                        G = dag_avg_deg(p, d, 1, 1, random_state=RANDOM_SEED + i)
                         np.save(dag_file_path, G)
 
                     if os.path.exists(data_file_path):
