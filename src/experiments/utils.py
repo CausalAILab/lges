@@ -130,7 +130,7 @@ def cpdag_shd(target, estimate):
     # Total SHD
     edit_distance = false_positives + false_negatives + wrong_orientations
     
-    return edit_distance
+    return edit_distance, false_positives, false_negatives, wrong_orientations
 
 
 class MetricsEvaluator:

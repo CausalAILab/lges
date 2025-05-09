@@ -56,8 +56,11 @@ def plot_obs_no_prior():
                     continue
 
                 estimate = np.load(estimate_file_path)
-                shd = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
+                shd, false_positives, false_negatives, wrong_orientations = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
                 metrics_data["SHD"][ci_type][num_nodes].append(shd)
+                metrics_data["False positives"][ci_type][num_nodes].append(false_positives)
+                metrics_data["False negatives"][ci_type][num_nodes].append(false_negatives)
+                metrics_data["Wrong orientations"][ci_type][num_nodes].append(wrong_orientations)
                 metrics_data["BIC"][ci_type][num_nodes].append(score_class.full_score(estimate))
 
                 with open(metrics_file_path, "r") as f:

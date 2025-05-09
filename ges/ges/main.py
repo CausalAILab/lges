@@ -219,12 +219,7 @@ def fit(
     last_log_time = time.time()
     print("Starting GES. Initial score: %0.4f" % total_score)
     while True:
-        # Check for timeout
-        if time.time() - start > 3600:  # 1 hour = 3600 seconds
-            print("Algorithm timed out after 1 hour.")
-            metrics["time"] = 3600
-            return A, metrics
-
+        G = utils.pdag_to_dag(A)
         last_total_score = total_score
         for phase in phases:
             if phase == "forward":
@@ -241,7 +236,7 @@ def fit(
                 if time.time() - last_log_time > 30:
                     print("Total score: %0.4f" % total_score)
                     last_log_time = time.time()
-                score_change, new_A = fun(A,  score_class, metrics, max(0, debug - 1), ci=ci, prune=prune)
+                score_change, new_A = fun(A,  score_class, metrics, max(0, debug - 1), ci=ci, G=G, prune=prune)
                 if score_change > 1e-6:
                     if fun == forward_step:
                         metrics["inserts_actual"] += 1
@@ -264,7 +259,7 @@ def fit(
     metrics["ops_eval"] = metrics["inserts_eval"] + metrics["deletes_eval"] + metrics["turns_eval"]
     metrics["ops_actual"] = metrics["inserts_actual"] + metrics["deletes_actual"] + metrics["turns_actual"]
     metrics["cis_eval"] = len(metrics["cis_eval"])
-    metrics["score"] = total_score
+    metrics["score"] = last_total_score
 
     if isinstance(ci, CIOracle):
         # subtract time taken for oracle 
@@ -274,7 +269,7 @@ def fit(
     return A, metrics
 
 
-def forward_step(A, cache, metrics, debug=0, ci=None, prune=False):
+def forward_step(A, cache, metrics, debug=0, ci=None, G=None, prune=False):
     """
     Scores all valid insert operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -302,8 +297,8 @@ def forward_step(A, cache, metrics, debug=0, ci=None, prune=False):
 
     """
     # global num_inserts_eval
-    # Pick arbitrary DAG in CPDAG
-    G = utils.pdag_to_dag(A)
+    if ci and G is None:
+        G = utils.pdag_to_dag(A)
     # Construct edge candidates (i.e. edges between non-adjacent nodes)
     fro, to = np.where((A + A.T + np.eye(len(A))) == 0)
     edge_candidates = list(zip(fro, to))
@@ -344,7 +339,7 @@ def forward_step(A, cache, metrics, debug=0, ci=None, prune=False):
         return score, new_A
 
 
-def backward_step(A, cache, metrics, debug=0,  ci=None, prune=False):
+def backward_step(A, cache, metrics, debug=0,  ci=None, G=None, prune=False):
     """
     Scores all valid delete operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -372,7 +367,8 @@ def backward_step(A, cache, metrics, debug=0,  ci=None, prune=False):
 
     """
     # global num_deletes_eval
-    G = utils.pdag_to_dag(A)
+    if ci and G is None:
+        G = utils.pdag_to_dag(A)
     # Construct edge candidates:
     #   - directed edges
     #   - undirected edges, counted only once
@@ -423,7 +419,7 @@ def backward_step(A, cache, metrics, debug=0,  ci=None, prune=False):
         return score, new_A
 
 
-def turning_step(A, cache, metrics, debug=0,  ci=None, prune=False):
+def turning_step(A, cache, metrics, debug=0,  ci=None, G=None, prune=False):
     """
     Scores all valid turn operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.

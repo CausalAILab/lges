@@ -73,7 +73,8 @@ if __name__ == "__main__":
     num_graphs = args.num_graphs
     model = args.model
 
-    settings = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
+    #  settings = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
+    settings = ["Without CIs", "With CI Test"]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
     
 
@@ -88,15 +89,6 @@ if __name__ == "__main__":
             for d in avg_degree:
                 key = f"vars_{p}_samples_{n}_degree_{d}_model_{model}"
 
-                # Check if results.json already exists for the current experiment
-                # results_file_path = os.path.join(key, "results.json")
-                # if os.path.exists(results_file_path):
-                #     print(f"Results already exist for key: {key}. Skipping experiment...")
-                #     continue
-
-                # m = MetricsEvaluator(settings)
-
-                # Create a directory for the experiment key
                 
                 os.makedirs(key, exist_ok=True)
 
@@ -205,13 +197,6 @@ if __name__ == "__main__":
                         if os.path.exists(lock_file_path):
                             os.remove(lock_file_path)
                     
-
-                    
-                
-                # results = m.summarize()
-                # # Save the summary to a file
-                # with open(results_file_path, "w") as results_file:
-                #     json.dump(results, results_file, indent=4)
                  
                 print("Completed experiment for:", key)
 
