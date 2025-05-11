@@ -18,10 +18,14 @@ def plot_obs_no_prior():
 
     # Structure: metrics_data[metric][ci_type][num_nodes] = list of values
     metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-    ci_types = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
+    ci_types = ["Without CIs", 
+                "With CI Test", 
+                "Prune With CI Test",
+                "With CI Score",
+                "Prune With CI Score",]
 
     for folder in os.listdir(base_dir):
-        match = re.match(r"vars_(\d+)_samples_(1000|10000)_degree_0.05_model_linear-gaussian", folder)
+        match = re.match(r"vars_(\d+)_samples_(10000)_degree_2.0_model_linear-gaussian", folder)
         if not match:
             continue
         num_nodes = int(match.group(1))
@@ -75,9 +79,10 @@ def plot_obs_no_prior():
     # Style maps
     styles = {
         "Without CIs":   {"linestyle": ":",  "color": "tab:blue",   "marker": "s"},
-        "With CI Oracle": {"linestyle": "-",  "color": "tab:orange", "marker": "o"},
+        "With CI Score": {"linestyle": "-",  "color": "tab:orange", "marker": "o"},
         "With CI Test":  {"linestyle": "--", "color": "tab:green",  "marker": "D"},
-        "Prune With CI Test": {"linestyle": "-.", "color": "tab:red", "marker": "^"}
+        "Prune With CI Test": {"linestyle": "-.", "color": "tab:red", "marker": "^"},
+        "Prune With CI Score": {"linestyle": "--", "color": "tab:purple", "marker": "x"},
     }
 
     rcParams.update({'font.size': 14})

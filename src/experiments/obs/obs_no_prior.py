@@ -39,15 +39,19 @@ num_samples_list = {"small": [500,1000],
 #                     "dense": [0.3, 0.4]
 #                    }
 
-avg_degree_list = {"sparse": [2],
-                    "medium": [3],
-                    "dense": [4]
+avg_degree_list = {"sparse": [2.0],
+                    "medium": [3.0],
+                    "dense": [4.0]
                    }
                     
 NUM_GRAPHS = 50
 
 # Convert RuntimeWarning to an exception
 # warnings.filterwarnings("error", category=RuntimeWarning)
+
+
+def run_obs_baselines():
+    pass
 
 
 if __name__ == "__main__":
@@ -80,7 +84,11 @@ if __name__ == "__main__":
     model = args.model
 
     #  settings = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
-    settings = ["Without CIs", "With CI Test"]
+    settings = ["Without CIs", 
+                "With CI Test", 
+                "Prune With CI Test",
+                "With CI Score",
+                "Prune With CI Score",]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
     
 
@@ -155,8 +163,14 @@ if __name__ == "__main__":
                             score_class = ges.scores.DiscreteObsL0Pen(data)
                         ci_oracle = CIOracle(G)
                         ci_test = CIT(data, ci_test_type[model])
-                        ci = {"Without CIs": None, "With CI Oracle": ci_oracle, 
-                              "With CI Test": ci_test, "Prune With CI Test": ci_test}
+                        ci = {"Without CIs": None,
+                              "With CI Score": None,
+                              "Prune With CI Score": None,
+                              "With CI Oracle": ci_oracle, 
+                              "With CI Test": ci_test, 
+                              "Prune With CI Test": ci_test,
+                              "Prune With CI Test Restart": ci_test
+                              }
 
 
                         metrics_file_path = os.path.join(trial_dir, f"metrics__{i}.json")
@@ -182,9 +196,14 @@ if __name__ == "__main__":
                             # Fit the model with the specified CI setting
                             print(f"Fitting model for setting: {setting}, graph: {i}")
                             prune = True if "Prune" in setting else False
+                            score_based = True if "Score" in setting else False
                             if prune:
                                 print("pruning is enabled in obs_no_prior")
-                            estimate, metrics = ges.fit(score_class, ci=ci[setting], prune=prune)
+                            estimate, metrics = ges.fit(score_class, 
+                                                        phases=["forward", "forward-restart", "backward", "turning"] if "Restart" in setting else ["forward", "backward", "turning"],
+                                                        ci=ci[setting], 
+                                                        prune=prune,
+                                                        score_based=score_based,)
                             
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)

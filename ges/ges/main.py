@@ -154,6 +154,7 @@ def fit(
     ci=None,
     debug=0,
     prune=False,
+    score_based=False
 ):
     """Run GES using a user defined score.
 
@@ -222,7 +223,7 @@ def fit(
         G = utils.pdag_to_dag(A)
         last_total_score = total_score
         for phase in phases:
-            if phase == "forward":
+            if phase == "forward" or phase == "forward-restart":
                 fun = forward_step
             elif phase == "backward":
                 fun = backward_step
@@ -236,7 +237,14 @@ def fit(
                 if time.time() - last_log_time > 30:
                     print("Total score: %0.4f" % total_score)
                     last_log_time = time.time()
-                score_change, new_A = fun(A,  score_class, metrics, max(0, debug - 1), ci=ci, G=G, prune=prune)
+                score_change, new_A = fun(A,
+                                          score_class, 
+                                          metrics, 
+                                          max(0, debug - 1), 
+                                          ci=ci, 
+                                          G=G, 
+                                          score_based=score_based,
+                                          prune=False if phase == "forward-restart" else prune)
                 if score_change > 1e-6:
                     if fun == forward_step:
                         metrics["inserts_actual"] += 1
@@ -269,7 +277,12 @@ def fit(
     return A, metrics
 
 
-def forward_step(A, cache, metrics, debug=0, ci=None, G=None, prune=False):
+def forward_step(A, cache, metrics, 
+                 debug=0, 
+                 ci=None, 
+                 G=None, 
+                 prune=False,
+                 score_based=False):
     """
     Scores all valid insert operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -306,14 +319,19 @@ def forward_step(A, cache, metrics, debug=0, ci=None, G=None, prune=False):
     valid_operators = []
     print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None 
     for x, y in edge_candidates:
-        if ci:
-            key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
-            metrics["cis_eval"].add(key)
-            # Check for dependence; insert only if dependent
-            if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G))):
-                continue
-            elif ci(x, y, list(utils.pa(y, G))) > ALPHA:
-                continue
+
+        if not check_legal_insert(A, cache, metrics, x, y, ci=ci, G=G, 
+                                  score_based=score_based):
+            continue
+
+        # if ci:
+        #     key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
+        #     metrics["cis_eval"].add(key)
+        #     # Check for dependence; insert only if dependent
+        #     if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G))):
+        #         continue
+        #     elif ci(x, y, list(utils.pa(y, G))) > ALPHA:
+        #         continue
 
         ops, found_lower_scoring = score_valid_insert_operators(
                     x, y, A, cache, debug=max(0, debug - 1), prune=prune
@@ -338,8 +356,49 @@ def forward_step(A, cache, metrics, debug=0, ci=None, G=None, prune=False):
         ) if debug else None
         return score, new_A
 
+def check_legal_insert(A, cache, metrics, x, y, 
+                       ci=None, G=None, score_based=False):
 
-def backward_step(A, cache, metrics, debug=0,  ci=None, G=None, prune=False):
+    if not ci and not score_based:
+        return True
+
+    if ci and score_based:
+        raise ValueError("Cannot use both CI and score-based pruning")
+
+    if G is None:
+        raise ValueError("G must be provided if pruning is used")
+    
+    # check if it's legal to insert x -> y in G
+    # G_copy = G.copy()
+    # G_copy[x][y] = 1
+    # if not utils.is_dag(G_copy):
+    #     return False
+
+    if ci:
+        key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
+        metrics["cis_eval"].add(key)
+        # Check for dependence; insert only if dependent
+        if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G))):
+            return False
+        elif ci(x, y, list(utils.pa(y, G))) > ALPHA:
+            return False
+            
+    if score_based:
+        metrics["inserts_eval"] += 1
+        if cache is None:
+            raise ValueError("score_class cache must be provided for score-based pruning")
+        if cache.local_score(y, utils.pa(y, G) | {x}) < cache.local_score(y, utils.pa(y, G)):
+            return False
+        
+    return True
+        
+
+def backward_step(A, cache, metrics, 
+                 debug=0, 
+                 ci=None, 
+                 G=None, 
+                 prune=False,
+                 score_based=False):
     """
     Scores all valid delete operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -419,7 +478,12 @@ def backward_step(A, cache, metrics, debug=0,  ci=None, G=None, prune=False):
         return score, new_A
 
 
-def turning_step(A, cache, metrics, debug=0,  ci=None, G=None, prune=False):
+def turning_step(A, cache, metrics, 
+                 debug=0, 
+                 ci=None, 
+                 G=None, 
+                 prune=False,
+                 score_based=False):
     """
     Scores all valid turn operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
