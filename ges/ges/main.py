@@ -154,7 +154,9 @@ def fit(
     ci=None,
     debug=0,
     prune=False,
-    score_based=False
+    score_based=False,
+    forbidden=None,
+    required=None,
 ):
     """Run GES using a user defined score.
 
@@ -244,7 +246,9 @@ def fit(
                                           ci=ci, 
                                           G=G, 
                                           score_based=score_based,
-                                          prune=False if phase == "forward-restart" else prune)
+                                          prune=False if phase == "forward-restart" else prune,
+                                          forbidden=forbidden,
+                                          required=required)
                 if score_change > 1e-6:
                     if fun == forward_step:
                         metrics["inserts_actual"] += 1
@@ -447,7 +451,9 @@ def forward_step(A, cache, metrics,
                  ci=None, 
                  G=None, 
                  prune=False,
-                 score_based=False):
+                 score_based=False,
+                 forbidden=None,
+                 required=None):
     """
     Scores all valid insert operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -483,43 +489,41 @@ def forward_step(A, cache, metrics,
     # For each edge, enumerate and score all valid operators
     valid_operators = []
     print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None 
-    for x, y in edge_candidates:
+    priority_list = get_priority_inserts(A, required=required, forbidden=forbidden)
 
-        if not check_legal_insert(A, cache, metrics, x, y, ci=ci, G=G, 
+    for edge_candidates in priority_list:
+        for x, y in edge_candidates:
+            if not check_legal_insert(A, cache, metrics, x, y, ci=ci, G=G, 
                                   score_based=score_based):
-            continue
+                continue
+            ops, found_lower_scoring = score_valid_insert_operators(
+                        x, y, A, cache, debug=max(0, debug - 1), prune=prune
+                    )
+            if prune and found_lower_scoring:
+                # dont consider any x,y inserts
+                metrics["inserts_eval"] += len(ops)
+                continue
 
-        # if ci:
-        #     key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
-        #     metrics["cis_eval"].add(key)
-        #     # Check for dependence; insert only if dependent
-        #     if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G))):
-        #         continue
-        #     elif ci(x, y, list(utils.pa(y, G))) > ALPHA:
-        #         continue
+            valid_operators += ops
 
-        ops, found_lower_scoring = score_valid_insert_operators(
-                    x, y, A, cache, debug=max(0, debug - 1), prune=prune
-                )
-        if prune and found_lower_scoring:
-            # dont consider any x,y inserts
-            metrics["inserts_eval"] += len(ops)
-            continue
+        # Pick the edge/operator with the highest score in the current priority list
+        if len(valid_operators) == 0:
+            continue # continue to next priority
+        else:
+            # insert best edge from current priority 
+            metrics["inserts_eval"] += len(valid_operators)
+            scores = [op[0] for op in valid_operators]
+            score, new_A, x, y, T = valid_operators[np.argmax(scores)]
+            print(
+                "  Best operator: insert(%d, %d, %s) -> (%0.4f)" % (x, y, T, score)
+            ) if debug else None
+            return score, new_A
+        
+    # If no valid insert operators were found in any priority list, return 0
+    print("  No valid insert operators remain") if debug else None
+    return 0, A
 
-        valid_operators += ops
 
-    # Pick the edge/operator with the highest score
-    if len(valid_operators) == 0:
-        print("  No valid insert operators remain") if debug else None
-        return 0, A
-    else:
-        metrics["inserts_eval"] += len(valid_operators)
-        scores = [op[0] for op in valid_operators]
-        score, new_A, x, y, T = valid_operators[np.argmax(scores)]
-        print(
-            "  Best operator: insert(%d, %d, %s) -> (%0.4f)" % (x, y, T, score)
-        ) if debug else None
-        return score, new_A
 
 def check_legal_insert(A, cache, metrics, x, y, 
                        ci=None, G=None, score_based=False):
@@ -563,7 +567,9 @@ def backward_step(A, cache, metrics,
                  ci=None, 
                  G=None, 
                  prune=False,
-                 score_based=False):
+                 score_based=False,
+                 forbidden=None,
+                 required=None):
     """
     Scores all valid delete operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -648,7 +654,9 @@ def turning_step(A, cache, metrics,
                  ci=None, 
                  G=None, 
                  prune=False,
-                 score_based=False):
+                 score_based=False,
+                 forbidden=None,
+                 required=None):
     """
     Scores all valid turn operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -794,6 +802,31 @@ def insert(x, y, T, A):
     new_A[y, T] = 0
     return new_A
 
+
+def get_priority_inserts(A, required=None, forbidden=None):
+    def is_directed(P, i, j):
+        return P[i][j] == 1 and P[j][i] == 0
+
+    def is_undirected(P, i, j):
+        return P[i][j] == 1 and P[j][i] == 1
+
+    priority_list = [set() for _ in range(4)]
+    fro, to = np.where((A + A.T + np.eye(len(A))) == 0)
+    edge_candidates = list(zip(fro, to))
+    for x, y in edge_candidates:
+        if required is not None and (is_directed(required, x, y) or is_undirected(required, x, y)):
+            priority_list[0].add((x, y))
+            continue
+        elif required is not None and is_directed(required, y, x):
+            priority_list[1].add((x, y))     
+            continue                      
+        elif forbidden is not None and (is_directed(forbidden, x, y) or is_undirected(forbidden, x, y)):
+            priority_list[3].add((x, y))
+            continue
+        else:
+            priority_list[2].add((x, y))
+
+    return priority_list
 
 def score_valid_insert_operators(x, y, A, cache, debug=0, prune=False):
     """Generate and score all valid insert(x,y,T) operators involving the edge
