@@ -158,12 +158,15 @@ if __name__ == "__main__":
     settings = ["With CI Test"]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
 
-    # (ci_type, init-type, prune_type)
-    configs = [("With CI Test", "no_init", True), # GES+ without initialization
-                #  ("Without CIs", "init", False),    # GES with initialization
-               ("With CI Test", "init", True),    # GES+ with initialization
-               ("With CI Test", "req", True)      # GES+ with required
+    
+    configs = [("Without CIs", "no_init"), # GES without initialization
+               ("Without CIs", "init"),    # GES with initialization
+               ("With CI Score", "init"),    # LGES with safe insert and initialization
+               ("With CI Score", "req"),      # LGES with safe insert and priority insertion
+               ("Prune With CI Score", "init"),    # LGES with safe insert and initialization
+               ("Prune With CI Score", "req")      # LGES with safe insert and priority insertion
                ]
+   
     
 
     # Loop over different configurations
@@ -224,12 +227,18 @@ if __name__ == "__main__":
                     elif model == "multinomial":
                         score_class = ges.scores.DiscreteObsL0Pen(data)
                     ci_test = CIT(data, ci_test_type[model])
-                    ci = {"Without CIs": None, "With CI Test": ci_test}
+                    ci = {"Without CIs": None,
+                          "With CI Score": None,
+                          "Prune With CI Score": None,
+                          }
 
 
-                    for ci_type, init_type, prune in configs:
+                    for ci_type, init_type in configs:
                         init_dir = os.path.join(trial_dir, init_type)
                         os.makedirs(init_dir, exist_ok=True)
+
+                        prune = True if "Prune" in ci_type else False
+                        score_based = True if "Score" in ci_type else False
 
 
                         if init_type == "no_init":
@@ -253,7 +262,8 @@ if __name__ == "__main__":
                             print(f"Running GES for init {init_type}, ci_type {ci_type}, graph: {i}")
                             estimate, metrics = ges.fit(score_class, 
                                                         ci=ci[ci_type],
-                                                        prune=prune)
+                                                        prune=prune,
+                                                        score_based=score_based,)
 
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)
@@ -286,6 +296,8 @@ if __name__ == "__main__":
                                 # Fit the model with the specified CI setting
                                 estimate, metrics = ges.fit(score_class, 
                                                             ci=ci[ci_type], 
+                                                            prune=prune,
+                                                            score_based=score_based,
                                                             A0=A0 if init_type == "init" else None,
                                                             required=required if init_type == "req" else None,
                                                             )
