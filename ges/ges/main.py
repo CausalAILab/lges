@@ -277,6 +277,171 @@ def fit(
     return A, metrics
 
 
+
+def fit_xges(
+    score_class,
+    completion_algorithm=None,
+    A0=None,
+    phases=["fb", "turning"],
+    iterate=False,
+    ci=None,
+    debug=0,
+    prune=False,
+    score_based=False
+):
+    """Run GES using a user defined score with the XGES heuristic of prioritizing deletions before insertions.
+
+    Parameters
+    ----------
+    score_class : ges.DecomposableScore
+        an instance of a class which inherits from
+        ges.decomposable_score.DecomposableScore (or defines a
+        local_score function and a p attribute, see
+        ges.decomposable_score for more info).
+    completion_algorithm : function, optional
+        the "completion algorithm" used to go from PDAG to CPDAG after
+        the application of each operator. If `None`, the algorithm
+        used in the original GES paper is used.
+    A0 : np.array, optional
+        the initial CPDAG on which GES will run, where where A0[i,j]
+        != 0 implies i -> j and A[i,j] != 0 & A[j,i] != 0 implies i -
+        j. Defaults to the empty graph.
+    phases : [{'forward', 'backward', 'turning'}*], optional
+        which phases of the GES procedure are run, and in which
+        order. Defaults to ['forward', 'backward', 'turning'].
+    iterate : bool, default=False
+        Indicates whether the algorithm should repeat the given phases
+        more than once, until the score is not improved.
+    debug : int, optional
+        if larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
+
+    Returns
+    -------
+    estimate : np.array
+        the adjacency matrix of the estimated CPDAG
+    total_score : float
+        the score of the estimate
+
+    """
+    start = time.time()
+    metrics = {
+        "inserts_eval": 0,
+        "deletes_eval": 0,
+        "turns_eval": 0,
+        "inserts_actual": 0,
+        "deletes_actual": 0,
+        "turns_actual": 0,
+        "cis_eval": set(),
+        "score": 0,
+        "time": 0,
+    }
+
+    # Select the desired phases
+    if len(phases) == 0:
+        raise ValueError("Must specify at least one phase")
+    # Set the completion algorithm
+    completion_algorithm = (
+        utils.pdag_to_cpdag if completion_algorithm is None else completion_algorithm
+    )
+    # Unless indicated otherwise, initialize to the empty graph
+    A0 = np.zeros((score_class.p, score_class.p)) if A0 is None else A0
+    # GES procedure
+    total_score = score_class.full_score(A0)
+    A, score_change = A0, np.inf
+    # Run each phase
+    print("Starting GES. Initial score: %0.4f" % total_score)
+
+    while True:
+        G = utils.pdag_to_dag(A)
+        last_total_score = total_score
+
+        # Combined Forward-Backward Phase
+        while True:
+            # First attempt a backward step
+            score_change, new_A = backward_step(A,
+                                    score_class, 
+                                    metrics, 
+                                    max(0, debug - 1), 
+                                    ci=ci, 
+                                    G=G, 
+                                    score_based=score_based)
+                        
+            if score_change > 1e-6:
+                metrics["deletes_actual"] += 1
+                A = completion_algorithm(new_A)
+                total_score += score_change
+                continue
+
+            # If no score-increasing backward step was found, try a turning step
+            score_change, new_A = turning_step(A,
+                                    score_class, 
+                                    metrics, 
+                                    max(0, debug - 1), 
+                                    ci=ci, 
+                                    G=G, 
+                                    score_based=score_based)
+            if score_change > 1e-6:
+                metrics["turns_actual"] += 1
+                A = completion_algorithm(new_A)
+                total_score += score_change
+                continue
+
+
+            # If no score-increasing backward step was found, try a forward step
+            score_change, new_A = forward_step(A,
+                                    score_class, 
+                                    metrics, 
+                                    max(0, debug - 1), 
+                                    ci=ci, 
+                                    G=G, 
+                                    score_based=score_based)
+                        
+            if score_change > 1e-6:
+                metrics["deletes_actual"] += 1
+                A = completion_algorithm(new_A)
+                total_score += score_change
+                continue
+            else: 
+                # If no score-increasing step was found, break out of the loop
+                break
+
+
+        # Turning phase
+        if "turning" in phases:
+            while True:
+                score_change, new_A = turning_step(A,
+                                        score_class, 
+                                        metrics, 
+                                        max(0, debug - 1), 
+                                        ci=ci, 
+                                        G=G, 
+                                        score_based=score_based)
+                if score_change > 1e-6:
+                    metrics["turns_actual"] += 1
+                    A = completion_algorithm(new_A)
+                    total_score += score_change
+                else:
+                    break
+
+
+        if total_score <= last_total_score or not iterate:
+            break
+
+    end = time.time()
+    metrics["ops_eval"] = metrics["inserts_eval"] + metrics["deletes_eval"] + metrics["turns_eval"]
+    metrics["ops_actual"] = metrics["inserts_actual"] + metrics["deletes_actual"] + metrics["turns_actual"]
+    metrics["cis_eval"] = len(metrics["cis_eval"])
+    metrics["score"] = last_total_score
+
+    if isinstance(ci, CIOracle):
+        # subtract time taken for oracle 
+        metrics["time"] = end - start - ci.dsep_total_time
+    else:
+        metrics["time"] = end - start
+        
+    return A, metrics
+
 def forward_step(A, cache, metrics, 
                  debug=0, 
                  ci=None, 

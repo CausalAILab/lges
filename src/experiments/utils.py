@@ -103,8 +103,8 @@ def cpdag_shd(target, estimate):
 
     skeleton_estimate = estimate + estimate.T
     skeleton_target = target + target.T
-    skeleton_estimate[skeleton_estimate == 2] = 1
-    skeleton_target[skeleton_target == 2] = 1
+    skeleton_estimate[skeleton_estimate >= 1] = 1
+    skeleton_target[skeleton_target >= 1] = 1
     
     # Difference of skeletons
     diff_skeletons = skeleton_estimate - skeleton_target

@@ -12,6 +12,55 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import rcParams
 import ges.ges as ges
+from causallearn.graph.GraphClass import CausalGraph
+
+
+
+pretty_metric_names = {
+    "SHD": "SHD",
+    "ops_eval": "Number of scoring operations",
+    "time": "Time (s)",
+    "BIC": "BIC",
+    "BIC difference from true DAG": "BIC Difference",
+    "False positives": "Excess Adjacencies",
+    "False negatives": "Missing Adjacencies",
+    "Wrong orientations": "Incorrect Orientations",
+}
+
+method_names = {
+    "Without CIs": "GES",
+    "With CI Score": "LGES with SafeInsert",
+    "Prune With CI Score": "LGES with ConservativeInsert",
+    "XGES": "XGES",
+    "PC": "PC",
+}
+
+
+
+def process_pc_estimate(estimate):
+
+    # PC alg returns cg : a CausalGraph object, where 
+    # cg.G.graph[j,i]=1 and cg.G.graph[i,j]=-1 indicate i –> j; 
+    # cg.G.graph[i,j] = cg.G.graph[j,i] = -1 indicate i — j; 
+    # cg.G.graph[i,j] = cg.G.graph[j,i] = 1 indicates i <-> j.
+
+   
+    G = estimate.G.graph
+
+    cpdag = np.zeros_like(np.asarray(G))
+
+    for i in range(G.shape[0]):
+        for j in range(G.shape[1]):
+            if G[i, j] == -1 and G[j, i] == -1:
+                cpdag[i, j] = 1
+                cpdag[j, i] = 1
+            elif G[j, i] == 1 and G[i, j] == -1:
+                cpdag[i, j] = 1
+
+    return cpdag
+
+
+
 
 def plot_obs_no_prior():
     base_dir = "./obs/results_no_prior"
@@ -19,10 +68,13 @@ def plot_obs_no_prior():
     # Structure: metrics_data[metric][ci_type][num_nodes] = list of values
     metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     ci_types = ["Without CIs", 
-                "With CI Test", 
-                "Prune With CI Test",
+                # "With CI Test", 
+                # "Prune With CI Test",
                 "With CI Score",
-                "Prune With CI Score",]
+                "Prune With CI Score",
+                # "XGES",
+                "PC",
+                ]
 
     for folder in os.listdir(base_dir):
         match = re.match(r"vars_(\d+)_samples_(10000)_degree_2.0_model_linear-gaussian", folder)
@@ -51,6 +103,7 @@ def plot_obs_no_prior():
             dag = np.load(dag_file)
             data = np.load(data_file)
             score_class = ges.scores.GaussObsL0Pen(data)
+            true_dag_score = score_class.full_score(dag)
 
             for ci_type in ci_types:
                 metrics_file_path = os.path.join(trial_path, f"metrics_{ci_type.replace(' ', '_').lower()}_{trial_number}.json")
@@ -59,13 +112,25 @@ def plot_obs_no_prior():
                 if not os.path.exists(metrics_file_path) or not os.path.exists(estimate_file_path):
                     continue
 
-                estimate = np.load(estimate_file_path)
+
+                estimate = np.load(estimate_file_path, allow_pickle=True)
+                if ci_type == "PC":
+                    estimate = estimate.item()
+                    estimate = process_pc_estimate(estimate)
+                            
                 shd, false_positives, false_negatives, wrong_orientations = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
                 metrics_data["SHD"][ci_type][num_nodes].append(shd)
                 metrics_data["False positives"][ci_type][num_nodes].append(false_positives)
                 metrics_data["False negatives"][ci_type][num_nodes].append(false_negatives)
                 metrics_data["Wrong orientations"][ci_type][num_nodes].append(wrong_orientations)
-                metrics_data["BIC"][ci_type][num_nodes].append(score_class.full_score(estimate))
+                try:
+                    estimate_dag = utils.pdag_to_dag(estimate)
+                    metrics_data["BIC"][ci_type][num_nodes].append(score_class.full_score(estimate_dag))
+                    metrics_data["BIC difference from true DAG"][ci_type][num_nodes].append(true_dag_score - score_class.full_score(estimate_dag))
+                except Exception as e:
+                    print(f"Error converting estimate to DAG: {e} for CI type {ci_type} and trial {trial_number}")
+                    continue
+               
 
                 with open(metrics_file_path, "r") as f:
                     metrics = json.load(f)
@@ -78,11 +143,21 @@ def plot_obs_no_prior():
 
     # Style maps
     styles = {
-        "Without CIs":   {"linestyle": ":",  "color": "tab:blue",   "marker": "s"},
-        "With CI Score": {"linestyle": "-",  "color": "tab:orange", "marker": "o"},
-        "With CI Test":  {"linestyle": "--", "color": "tab:green",  "marker": "D"},
-        "Prune With CI Test": {"linestyle": "-.", "color": "tab:red", "marker": "^"},
-        "Prune With CI Score": {"linestyle": "--", "color": "tab:purple", "marker": "x"},
+        "Without CIs": {
+            "linestyle": ":", "color": "tab:blue", "marker": "s", "label": "Without CIs"
+        },
+        "With CI Score": {
+            "linestyle": "-", "color": "tab:orange", "marker": "o", "label": "With CI Score"
+        },
+        "Prune With CI Score": {
+            "linestyle": "--", "color": "mediumpurple", "marker": "^", "label": "Prune (CI Score)"
+        },
+        "XGES": {
+            "linestyle": "-", "color": "dimgray", "marker": "v", "label": "XGES"
+        },
+        "PC": {
+            "linestyle": "-.", "color": "tab:green", "marker": "D", "label": "PC"
+        },
     }
 
     rcParams.update({'font.size': 14})
@@ -98,7 +173,7 @@ def plot_obs_no_prior():
 
             plt.errorbar(
                 x_vals, means, yerr=stds,
-                label=ci_type,
+                label=method_names[ci_type],
                 linestyle=s["linestyle"],
                 color=s["color"],
                 marker=s["marker"],
@@ -106,14 +181,45 @@ def plot_obs_no_prior():
                 linewidth=2
             )
 
+        if metric == "time" or metric == "ops_eval":
+            plt.yscale("log")
+            
+        desired_order = ["PC", "Without CIs",  "XGES", "With CI Score", "Prune With CI Score"]
+        desired_order = [method_names[ci] for ci in desired_order if ci in method_names]
 
+        # Reorder
+        handles, labels = plt.gca().get_legend_handles_labels()
+        sorted_handles_labels = sorted(zip(handles, labels), key=lambda x: desired_order.index(x[1]))
+        sorted_handles, sorted_labels = zip(*sorted_handles_labels)
+        plt.errorbar(
+            x_vals,
+            means,
+            yerr=stds,
+            label=ci_type,
+            linestyle=s["linestyle"],
+            color=s["color"],
+            marker=s["marker"],
+            linewidth=2,
+            elinewidth=1,        # thinner error bars
+            ecolor=s["color"],   # match line color
+            alpha=0.5,           # slightly transparent error bars
+            capsize=2,           # small caps (optional)
+            zorder=1             # draw error bars below lines
+        )
         plt.xlabel("Number of Nodes")
-        plt.ylabel(metric.capitalize())
+        plt.ylabel(pretty_metric_names[metric] if metric in pretty_metric_names.keys() else metric)
         # plt.yscale("log")
         #  plt.title(f"{metric.capitalize()} vs Number of Nodes")
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
-        plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0))
+        plt.legend(
+            sorted_handles,
+            sorted_labels,
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            fontsize=12,
+            title="Method"
+        )       
         plt.savefig(os.path.join(output_dir, f"{metric}.png"), dpi=300, bbox_inches="tight")
         plt.close()
 

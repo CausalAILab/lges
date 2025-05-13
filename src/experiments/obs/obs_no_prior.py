@@ -12,6 +12,8 @@ import argparse
 import os
 import json
 from sempler.generators import dag_avg_deg
+from causallearn.search.ConstraintBased.PC import pc
+import time
 
 NUM_GRAPHS = 50  # number of graphs
 NUM_VARS = 20
@@ -34,14 +36,15 @@ num_samples_list = {"small": [500,1000],
                     "large": [100000,500000],
                     "very_large": [1000000]
                    }
-# avg_degree_list = {"sparse": [0.01, 0.05],
+# avg_density_list = {"sparse": [0.01, 0.05],
 #                     "medium": [0.1, 0.2],
 #                     "dense": [0.3, 0.4]
 #                    }
 
-avg_degree_list = {"sparse": [2.0],
-                    "medium": [3.0],
-                    "dense": [4.0]
+avg_degree_list = {"sparse": [1.0],
+                    "medium": [2.0],
+                    "dense": [3.0],
+                    "verydense": [4.0]
                    }
                     
 NUM_GRAPHS = 50
@@ -50,8 +53,47 @@ NUM_GRAPHS = 50
 # warnings.filterwarnings("error", category=RuntimeWarning)
 
 
-def run_obs_baselines():
-    pass
+def run_obs_baselines(data, trial_dir, trial_num):
+
+    # Run XGES with deletions before insertions heuristic 
+    # Run PC
+
+    baselines = ["xges", "pc"]
+
+    for baseline in baselines:
+        # Check if the baseline already exists
+        estimate_file_path = os.path.join(trial_dir, f"estimate_{baseline}_{trial_num}.npy")
+        metrics_file_path = os.path.join(trial_dir, f"metrics_{baseline}_{trial_num}.json")
+        
+        if os.path.exists(estimate_file_path) != os.path.exists(metrics_file_path):
+            if os.path.exists(estimate_file_path):
+                os.remove(estimate_file_path)
+            if os.path.exists(metrics_file_path):
+                os.remove(metrics_file_path)
+        
+        if os.path.exists(estimate_file_path) and os.path.exists(metrics_file_path):
+            print(f"{baseline} estimate and metrics already exists for trial {trial_num}. Skipping...")
+            continue
+
+        # Run the baseline method
+        if baseline == "xges":
+            print(f"Running XGES for {trial_dir}...")
+            score_class = ges.scores.GaussObsL0Pen(data)
+            estimate, metrics = ges.fit_xges(score_class)
+            # Save the estimate and metrics to a file
+            
+        elif baseline == "pc":
+            # Run PC
+            print(f"Running PC for {trial_dir}...")
+            start = time.time()
+            estimate = pc(data, indep_test="fisherz", alpha=ges.ALPHA)
+            end = time.time()
+            metrics = {"time": end - start}
+
+        np.save(estimate_file_path, estimate)
+        with open(metrics_file_path, "w") as metrics_file:
+            json.dump(metrics, metrics_file, indent=4)
+ 
 
 
 if __name__ == "__main__":
@@ -63,6 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--avg_degree", type=str, help=f"Graph density for the experiment (options: {', '.join(avg_degree_list.keys())} or a single float). Default: medium.")
     parser.add_argument("-g", "--num_graphs", type=int, default=NUM_GRAPHS, help=f"Number of graphs for the experiment (default: {NUM_GRAPHS}).")
     parser.add_argument("-m", "--model", choices=["multinomial", "linear-gaussian"], default="linear-gaussian", help="Model type for data generation (options: multinomial, linear-gaussian). Default: linear-gaussian.")
+    parser.add_argument("-b", "--run_baselines", action="store_true", help="Flag to indicate whether to run baseline methods (default: False).")
     args = parser.parse_args()
 
     try:
@@ -82,11 +125,12 @@ if __name__ == "__main__":
     
     num_graphs = args.num_graphs
     model = args.model
+    run_baselines = args.run_baselines
 
     #  settings = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
     settings = ["Without CIs", 
-                "With CI Test", 
-                "Prune With CI Test",
+                # "With CI Test", 
+                # "Prune With CI Test",
                 "With CI Score",
                 "Prune With CI Score",]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
@@ -210,7 +254,8 @@ if __name__ == "__main__":
                             with open(metrics_file_path, "w") as metrics_file:
                                 json.dump(metrics, metrics_file, indent=4)
 
-
+                        if run_baselines:
+                            run_obs_baselines(data, trial_dir, i)
                         
                     except KeyboardInterrupt:
                         # Remove the lock file if a keyboard interrupt occurs
