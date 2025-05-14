@@ -224,15 +224,205 @@ def plot_obs_no_prior():
         plt.close()
 
 
-def plot_obs_init_fc():
-    base_dir = "./obs/results_init"
+def plot_fc_vs_metric_per_nvars(base_dir="./obs/results_init", output_dir="./obs/plots_fc_xaxis", max_std=20):
+    import os, re, json
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from collections import defaultdict
 
-    # Structure: metrics_data[metric][(init_type, ci_type, fc_value)][num_nodes] = list of values
-    metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+
+    style_map = {
+        ("Without CIs", "no_init"): "GES",
+        ("Without CIs", "init"): "GES-Init",
+        ("With CI Score", "init"): "LGES-Init (SafeInsert)",
+        ("With CI Score", "req"): "LGES (SafeInsert)",
+        ("Prune With CI Score", "init"): "LGES-Init (ConservativeInsert)",
+        ("Prune With CI Score", "req"): "LGES (ConservativeInsert)",
+    }
+
+    pretty_metric_names = {
+        "SHD": "SHD",
+        "time": "Time (s)"
+    }
+
+    metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))    
     fc_values_found = set()
+    nvars_found = set()
+
+    ci_tags = {
+        "Without CIs": "without_cis",
+        "With CI Score": "with_ci_score",
+        "Prune With CI Score": "prune_with_ci_score"
+    }
+    init_types = ["init", "req", "no_init"]
 
     for folder in os.listdir(base_dir):
-        match = re.match(r"vars_(\d+)_samples_1000_degree_3_model_linear-gaussian", folder)
+        match = re.match(r"vars_(\d+)_samples_1000_degree_2_model_linear-gaussian", folder)
+        if not match:
+            continue
+        num_nodes = int(match.group(1))
+        nvars_found.add(num_nodes)
+        folder_path = os.path.join(base_dir, folder)
+
+        for trial in os.listdir(folder_path):
+            trial_match = re.match(r"trial_(\d+)", trial)
+            if not trial_match:
+                continue
+            trial_number = trial_match.group(1)
+            trial_path = os.path.join(folder_path, trial)
+            dag_path = os.path.join(trial_path, f"dag_{trial_number}.npy")
+            if not os.path.exists(dag_path): continue
+            dag = np.load(dag_path)
+
+            for init_type in init_types:
+                subdir = os.path.join(trial_path, init_type)
+                if not os.path.isdir(subdir): continue
+
+                for ci_type, tag in ci_tags.items():
+                    if init_type == "no_init" and ci_type != "Without CIs":
+                        continue
+
+                    if init_type == "no_init":
+                        fc = None
+                        est_file = f"estimate_{tag}_{trial_number}.npy"
+                        met_file = f"metrics_{tag}_{trial_number}.json"
+                        ef_path = os.path.join(subdir, est_file)
+                        mf_path = os.path.join(subdir, met_file)
+                        if not os.path.exists(ef_path) or not os.path.exists(mf_path): continue
+                        est = np.load(ef_path)
+                        shd = cpdag_shd(utils.dag_to_cpdag(dag), est)
+                        metrics_data["SHD"][(ci_type, init_type, fc)][num_nodes].append(shd)
+                        with open(mf_path) as f: m = json.load(f)
+                        if "time" in m:
+                            metrics_data["time"][(ci_type, init_type, fc)][num_nodes].append(m["time"])
+                        continue
+
+                    pattern = re.compile(rf"estimate_{tag}_fc_([0-9.]+)_{trial_number}.npy")
+                    for fname in os.listdir(subdir):
+                        match = pattern.match(fname)
+                        if not match: continue
+                        fc = float(match.group(1))
+                        fc_values_found.add(fc)
+                        est_path = os.path.join(subdir, fname)
+                        met_path = os.path.join(subdir, f"metrics_{tag}_fc_{fc}_{trial_number}.json")
+                        if not os.path.exists(est_path) or not os.path.exists(met_path): continue
+                        est = np.load(est_path)
+                        shd = cpdag_shd(utils.dag_to_cpdag(dag), est)
+                        metrics_data["SHD"][(ci_type, init_type, fc)][num_nodes].append(shd)
+                        with open(met_path) as f: m = json.load(f)
+                        if "time" in m:
+                            metrics_data["time"][(ci_type, init_type, fc)][num_nodes].append(m["time"])
+
+    fc_values = sorted(fc_values_found)
+    nvars_list = sorted(nvars_found)
+
+    # Style maps
+    colors = {
+        "GES": "tab:blue",
+        "GES-Init": "tab:cyan",
+        "LGES-Init (SafeInsert)": "tab:orange",
+        "LGES (SafeInsert)": "darkorange",
+        "LGES-Init (ConservativeInsert)": "tab:purple",
+        "LGES (ConservativeInsert)": "mediumpurple",
+    }
+    linestyles = {
+        "GES": ":",
+        "GES-Init": ":",
+        "LGES-Init (SafeInsert)": "-",
+        "LGES (SafeInsert)": "--",
+        "LGES-Init (ConservativeInsert)": "-",
+        "LGES (ConservativeInsert)": "--",
+    }
+    markers = {
+        "GES": "s",
+        "GES-Init": "o",
+        "LGES-Init (SafeInsert)": "o",
+        "LGES (SafeInsert)": "D",
+        "LGES-Init (ConservativeInsert)": "o",
+        "LGES (ConservativeInsert)": "D",
+    }
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    for metric in ["SHD", "time"]:
+        fig, axs = plt.subplots(1, len(nvars_list), figsize=(6 * len(nvars_list), 5), sharey=True)
+        axs = axs if len(nvars_list) > 1 else [axs]
+
+        for i, nvars in enumerate(nvars_list):
+            ax = axs[i]
+            plotted = set()
+
+            for (ci_type, init_type, fc), node_dict in metrics_data[metric].items():
+                if nvars not in node_dict:
+                    continue
+                label = style_map.get((ci_type, init_type))
+                if not label: continue
+                values = node_dict[nvars]
+
+                if fc is None:
+                    mean_val = np.mean(values)
+                    std_val = min(np.std(values), max_std)
+                    ax.hlines(mean_val, xmin=min(fc_values), xmax=max(fc_values),
+                              linestyles=linestyles[label], colors=colors[label],
+                              label=label if label not in plotted else None,
+                              linewidth=2)
+                    plotted.add(label)
+                else:
+                    x_vals, means, stds = [], [], []
+                    for fcv in fc_values:
+                        v = metrics_data[metric][(ci_type, init_type, fcv)][nvars]
+                        if not v: continue
+                        x_vals.append(fcv)
+                        means.append(np.mean(v))
+                        stds.append(min(np.std(v), max_std))
+                    if x_vals:
+                        ax.errorbar(x_vals, means, yerr=stds,
+                                    label=label if label not in plotted else None,
+                                    linestyle=linestyles[label],
+                                    color=colors[label],
+                                    marker=markers[label],
+                                    capsize=4,
+                                    linewidth=2,
+                                    elinewidth=1,
+                                    alpha=0.8)
+                        plotted.add(label)
+
+            ax.set_title(f"{nvars} Variables")
+            ax.set_xlabel("fc")
+            if i == 0:
+                ax.set_ylabel(pretty_metric_names[metric])
+            if metric == "time":
+                ax.set_yscale("log")
+            ax.grid(True, linestyle="--", alpha=0.6)
+
+        axs[-1].legend(title="Method", fontsize=11, loc="center left", bbox_to_anchor=(1.02, 0.5))
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_dir, f"{metric}_vs_fc_by_nvars.png"), dpi=300)
+        plt.close()
+
+
+
+
+def plot_obs_init_fc(base_dir="./obs/results_init", output_dir="./obs/plots_init"):
+    os.makedirs(output_dir, exist_ok=True)
+    rcParams.update({'font.size': 14})
+
+    metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))  # metric → (ci_type, init_type, fc) → num_nodes → list
+    fc_values_found = set()
+
+    ci_tags = {
+        "Without CIs": "without_cis",
+        "With CI Score": "with_ci_score",
+        "Prune With CI Score": "prune_with_ci_score"
+    }
+
+    init_types = ["init", "req", "no_init"]
+
+    if not os.path.exists(base_dir):
+        raise FileNotFoundError(f"Base directory does not exist: {base_dir}")
+
+    for folder in os.listdir(base_dir):
+        match = re.match(r"vars_(\d+)_samples_1000_degree_2_model_linear-gaussian", folder)
         if not match:
             continue
         num_nodes = int(match.group(1))
@@ -247,102 +437,107 @@ def plot_obs_init_fc():
             if not os.path.isdir(trial_path):
                 continue
 
-            for init_type in ["init", "no_init", "req"]:
-                init_path = os.path.join(trial_path, init_type)
-                if not os.path.exists(init_path):
+            dag_path = os.path.join(trial_path, f"dag_{trial_number}.npy")
+            if not os.path.exists(dag_path):
+                continue
+            dag = np.load(dag_path)
+
+            for init_type in init_types:
+                subdir = os.path.join(trial_path, init_type)
+                if not os.path.isdir(subdir):
                     continue
 
-                if init_type == "init" or init_type == "req":
-                    # Handle multiple fc values
-                    for file in os.listdir(init_path):
-                        fc_match = re.match(r"metrics_with_ci_test_fc_([0-9.]+)_([0-9]+)\.json", file)
-                        if not fc_match:
+                for ci_type, tag in ci_tags.items():
+                    if init_type == "no_init":
+                        if ci_type != "Without CIs":
                             continue
-                        fc_str = fc_match.group(1)  # e.g., "0", "0.25", "1"
-                        fc_value = float(fc_str)
-                        fc_values_found.add(fc_value)
-
-                        metrics_filepath = os.path.join(init_path, file)
-                        estimate_file = os.path.join(init_path, f"estimate_with_ci_test_fc_{fc_value}_{trial_number}.npy")
-                        dag_file = os.path.join(trial_path, f"dag_{trial_number}.npy")
-
-                        if not os.path.exists(dag_file) or not os.path.exists(estimate_file):
+                        fc = None
+                        estimate_file = os.path.join(subdir, f"estimate_{tag}_{trial_number}.npy")
+                        metrics_file = os.path.join(subdir, f"metrics_{tag}_{trial_number}.json")
+                        if not os.path.exists(estimate_file) or not os.path.exists(metrics_file):
                             continue
 
-                        dag = np.load(dag_file)
                         estimate = np.load(estimate_file)
                         shd = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
-                        metrics_data["SHD"][(f"{init_type}", "with_ci", fc_value)][num_nodes].append(shd)
+                        metrics_data["SHD"][(ci_type, init_type, fc)][num_nodes].append(shd)
 
-                        with open(metrics_filepath, "r") as f:
+                        with open(metrics_file) as f:
                             metrics = json.load(f)
-                            for metric, value in metrics.items():
-                                metrics_data[metric][(f"{init_type}", "with_ci", fc_value)][num_nodes].append(value)
+                            if "time" in metrics:
+                                metrics_data["time"][(ci_type, init_type, fc)][num_nodes].append(metrics["time"])
+                        continue
 
-                else:
-                    # Only one version for no_init
-                    for ci_type, ci_setting in [("with_ci", "_with_ci_test_"), ("without_ci", "_without_cis_")]:
-                        metrics_filename = f"metrics{ci_setting}{trial_number}.json"
-                        metrics_filepath = os.path.join(init_path, metrics_filename)
-                        estimate_file = os.path.join(init_path, f"estimate{ci_setting}{trial_number}.npy")
-                        dag_file = os.path.join(trial_path, f"dag_{trial_number}.npy")
+                    # init or req, look for fc-tagged files
+                    pattern = re.compile(rf"estimate_{tag}_fc_([0-9.]+)_{trial_number}.npy")
+                    for fname in os.listdir(subdir):
+                        match = pattern.match(fname)
+                        if not match:
+                            continue
+                        fc = float(match.group(1))
+                        fc_values_found.add(fc)
 
-                        if not os.path.exists(metrics_filepath) or not os.path.exists(dag_file) or not os.path.exists(estimate_file):
+                        estimate_file = os.path.join(subdir, fname)
+                        metrics_file = os.path.join(subdir, f"metrics_{tag}_fc_{fc}_{trial_number}.json")
+                        if not os.path.exists(estimate_file) or not os.path.exists(metrics_file):
                             continue
 
-                        dag = np.load(dag_file)
                         estimate = np.load(estimate_file)
                         shd = cpdag_shd(utils.dag_to_cpdag(dag), estimate)
-                        metrics_data["SHD"][("no_init", ci_type, None)][num_nodes].append(shd)
+                        metrics_data["SHD"][(ci_type, init_type, fc)][num_nodes].append(shd)
 
-                        with open(metrics_filepath, "r") as f:
+                        with open(metrics_file) as f:
                             metrics = json.load(f)
-                            for metric, value in metrics.items():
-                                metrics_data[metric][("no_init", ci_type, None)][num_nodes].append(value)
+                            if "time" in metrics:
+                                metrics_data["time"][(ci_type, init_type, fc)][num_nodes].append(metrics["time"])
 
-    # Plotting
-    output_dir = "./obs/plots_init"
-    os.makedirs(output_dir, exist_ok=True)
+    fc_values = sorted(fc_values_found)
 
-    fc_colors = {
-        0.0: 'tab:blue',
-        0.25: 'tab:orange',
-        0.5: 'tab:green',
-        0.75: 'tab:red',
-        1.0: 'tab:purple'
+    # Style map
+    style_map = {
+        ("Without CIs", "no_init"): "GES",
+        ("Without CIs", "init"): "GES-Init",
+        ("With CI Score", "init"): "LGES-Init (SafeInsert)",
+        ("With CI Score", "req"): "LGES (SafeInsert)",
+        ("Prune With CI Score", "init"): "LGES-Init (ConservativeInsert)",
+        ("Prune With CI Score", "req"): "LGES (ConservativeInsert)",
     }
 
+    for metric in ["SHD", "time"]:
+        fig, axs = plt.subplots(1, len(fc_values), figsize=(6 * len(fc_values), 5), sharey=True)
+        axs = axs if len(fc_values) > 1 else [axs]
 
-    for metric, config_data in metrics_data.items():
-        plt.figure()
+        for i, fc in enumerate(fc_values):
+            ax = axs[i]
+            for (ci_type, init_type, m_fc), node_dict in metrics_data[metric].items():
+                if m_fc is not None and not np.isclose(m_fc, fc):
+                    continue
+                if m_fc is None or np.isclose(m_fc, fc):
+                    x_vals = sorted(node_dict.keys())
+                    means = [np.mean(node_dict[n]) for n in x_vals]
+                    stds = [np.std(node_dict[n]) for n in x_vals]
+                    style = style_map.get((ci_type, init_type), {})
+                    ax.errorbar(
+                        x_vals, means, yerr=stds,
+                        label=style.get("label", f"{init_type} ({ci_type})"),
+                        linestyle=style.get("linestyle", "-"),
+                        color=style.get("color", "black"),
+                        marker=style.get("marker", "o"),
+                        capsize=4,
+                        linewidth=2,
+                        elinewidth=1,
+                        alpha=0.7
+                    )
 
+            ax.set_title(f"FC = {fc}")
+            ax.set_xlabel("Number of Nodes")
+            if i == 0:
+                ax.set_ylabel(pretty_metric_names.get(metric, metric))
+            ax.grid(True, linestyle="--", alpha=0.6)
 
-        for (init_type, ci_type, fc_value), node_dict in sorted(config_data.items(), key=lambda x: (x[0][0], x[0][1], x[0][2] or -1)):
-            x_vals = sorted(node_dict.keys())
-            means = [np.mean(node_dict[n]) for n in x_vals]
-            stds = [np.std(node_dict[n]) for n in x_vals]
-
-            # Determine line style and color
-            if init_type in ["init", "req"]:
-                linestyle = '-' if init_type == "init" else '--'
-                color = fc_colors.get(fc_value, 'black')  # fallback in case
-                label = f"{init_type}, fc={fc_value}"
-            else:
-                linestyle = '-'  # solid for no_init
-                color = 'gray' if ci_type == "without_ci" else 'black'
-                label = f"{init_type}, {ci_type}"
-
-            plt.errorbar(x_vals, means, yerr=stds, label=label, marker='o', capsize=5, linestyle=linestyle)
-
-        plt.xlabel("Number of Nodes")
-        plt.ylabel(metric)
-        plt.title(f"{metric} vs Number of Nodes")
-        plt.legend()
-        plt.grid(True)
+        axs[-1].legend(title="Method", fontsize=11, loc="center left", bbox_to_anchor=(1.02, 0.5))
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"{metric}.png"))
+        plt.savefig(os.path.join(output_dir, f"{metric}_by_fc.png"), dpi=300)
         plt.close()
-
 
 def plot_obs_init_fc_seaborn():
     base_dir = "./obs/results_init"
@@ -486,6 +681,7 @@ def plot_obs_init_fc_seaborn():
 
 if __name__ == "__main__":
     # plot_obs_no_prior_seaborn()
-    plot_obs_no_prior()
+    # plot_obs_no_prior()
     # plot_obs_init_fc()
+    plot_fc_vs_metric_per_nvars()
     # plot_obs_init_fc_seaborn()
