@@ -549,6 +549,73 @@ def is_consistent_extension(G, P, debug=False):
 # The complete pipeline: pdag -> dag -> ordered -> labelled -> cpdag
 
 
+def pdag_to_mpdag(P, debug=False):
+    """
+    Obtain a maximal PDAG from the given PDAG by orienting edges according to Meek rules.
+
+    Parameters
+    ----------
+    P : np.array
+         the adjacency matrix of a given PDAG where pdag[i,j] != 0 if i
+        -> j and i - j if also pdag[j,i] != 0.
+
+    Returns
+    -------
+    mpdag : np.array
+        the adjacency matrix of the corresponding maximal PDAG
+    """
+
+    n = P.shape[0]
+    pdag = P.copy()
+    changed = True
+
+    def is_directed(i, j):
+        return pdag[i, j] == 1 and pdag[j, i] == 0
+    
+    def is_undirected(i, j):
+        return pdag[i, j] == 1 and pdag[j, i] == 1
+
+    def is_non_adjacent(i, j):
+        return pdag[i, j] == 0 and pdag[j, i] == 0
+
+    while changed:
+        changed = False
+
+
+        for i in range(n):
+            chld = ch(i, pdag)
+            for j in chld:
+                # Rule 1: i → j — k and i not adjacent to k ⇒ j → k
+                targets = neighbors(j, pdag) -  adj(i, pdag)
+                for k in targets:
+                    pdag[j, k] = 1
+                    pdag[k, j] = 0
+                    changed = True
+
+
+                # Rule 2: i → j → k and i — k ⇒ i → k
+                targets = ch(j, pdag) & neighbors(i, pdag)
+                for k in targets:
+                    pdag[i, k] = 1
+                    pdag[k, i] = 0
+                    changed = True
+
+
+            nbrs = neighbors(i, pdag)
+            for j, k, l in itertools.permutations(nbrs, 3):
+                # Rule 3: i — j, i — k, i — l, j → k, l → k, j not adjacent to l ⇒ i → k
+                if is_directed(j, k) and is_directed(l, k) and is_non_adjacent(j, l):
+                    pdag[i, k] = 1
+                    pdag[k, i] = 0
+                    changed = True
+                # Rule 4: i — j, i — k, i — l, j ← k, l → k, j not adjacent to l ⇒ i → j
+                elif is_directed(k, j) and is_directed(l, k) and is_non_adjacent(j, l):
+                    pdag[i, j] = 1
+                    pdag[j, i] = 0
+                    changed = True
+
+    return pdag
+
 def pdag_to_cpdag(pdag):
     """
     Transform a PDAG into its corresponding CPDAG. Returns a ValueError

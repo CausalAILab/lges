@@ -79,7 +79,7 @@ def get_random_data(G, num_samples, model="linear-gaussian", interventions=[{}],
                 # sample noise variances from U(0.1, 0.5)
                 noise_variances = np.random.uniform(0.1, 0.5, size=G.shape[0])
                 sampler = sempler.LGANM(W, noise_means, noise_variances, random_state=random_state)
-                data = [sampler.sample(n=num_samples, do_interventions=i) for i in interventions]
+                data = [sampler.sample(n=num_samples if len(i)==0 else int(num_samples//10), do_interventions=i) for i in interventions]
                 return data 
         except RuntimeWarning as e:
             return []  # Return empty to indicate failure
