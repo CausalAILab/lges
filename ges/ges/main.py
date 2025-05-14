@@ -280,6 +280,40 @@ def fit(
         metrics["time"] = end - start
     return A, metrics
 
+def fit_interventional(score_class,
+                       completion_algorithm=None,
+                       A0=None,
+                       phases=["forward", "backward", "turning"],
+                       iterate=False,
+                       ci=None,
+                       debug=0,
+                       prune=False,
+                       score_based=False,
+                       targets=[[]],
+                       required=None,
+                       forbidden=None
+):
+    # First, get observational equivalence class
+    start = time.time()
+    estimate, _ = fit(score_class=score_class[0], # use observational score
+                        completion_algorithm=completion_algorithm,
+                        A0=A0,
+                        phases=phases,
+                        iterate=iterate,
+                        debug=debug,
+                        prune=prune,
+                        score_based=score_based,
+                        required=required,
+                        forbidden=forbidden
+                    )
+    
+    # Then, refine using interventional data
+    estimate = intervention_phase(A=estimate, score_class=score_class, targets=targets)
+
+    end = time.time()
+    metrics = {"time": end - start}
+
+    return estimate, metrics
 
 
 def fit_xges(
@@ -712,8 +746,7 @@ def turning_step(A, cache, metrics,
 # --------------------------------------------------------------------
 # Intervention phase
 #
-
-def intervention_phase(A, cache, metrics, interventions=[],debug=0, ci=None):
+def intervention_phase(A, score_class, targets=[], debug=0,):
     """
     Consructs an interventional MEC from an observational MEC.
 
@@ -740,17 +773,27 @@ def intervention_phase(A, cache, metrics, interventions=[],debug=0, ci=None):
     fro, to = np.where(utils.only_undirected(A))
     undirected_edges = filter(lambda e: e[0] > e[1], zip(fro, to))  # zip(fro,to)
     edge_candidates = list(undirected_edges)
-    # For each edge, enumerate and score all valid operators
-    valid_operators = []
-    print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None
+
     for x, y in edge_candidates:
-        for i in interventions:
-            if x in i and y not in i:
-                pass
-            elif y in i and x not in i:
-                pass
+        if not (A[x][y] == 1 and A[y][x] == 1):
+            # edge has already been oriented
+            continue
+        score_change = 0
+        for i in range(1, len(targets)): # ignore obs data
+            target = targets[i]
+            if x in target and y not in target:
+                score_change += score_class[i].local_score(y, {x}) - score_class[i].local_score(y, {})
+        if score_change > 0:
+                A[x][y] = 1
+                A[y][x] = 0
+        elif score_change < 0:
+                A[x][y] = 0
+                A[y][x] = 1
+        if score_change != 0:
+            # orient edges according to Meek rules
+            A = utils.pdag_to_mpdag(A)
 
-
+    return A
 
 
 # --------------------------------------------------------------------
