@@ -1,10 +1,9 @@
 import ges
-import ges.utils as utils
+import ges.ges.utils as utils
 from causallearn.utils.cit import CIT
 import pooch
 import pandas as pd
 import numpy as np
-from sempler.generators import dag_avg_deg
 
 # Fetch and preprocess observational data
 def fetch_and_preprocess_data(url):
