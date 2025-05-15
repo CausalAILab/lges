@@ -14,6 +14,9 @@ import json
 from sempler.generators import dag_avg_deg
 from causallearn.search.ConstraintBased.PC import pc
 import time
+from causalnex.structure.notears import from_numpy
+import networkx as nx
+
 
 NUM_GRAPHS = 50  # number of graphs
 NUM_VARS = 20
@@ -58,7 +61,7 @@ def run_obs_baselines(data, trial_dir, trial_num):
     # Run XGES with deletions before insertions heuristic 
     # Run PC
 
-    baselines = ["xges", "pc"]
+    baselines = ["xges", "pc", "notears"]
 
     for baseline in baselines:
         # Check if the baseline already exists
@@ -88,6 +91,18 @@ def run_obs_baselines(data, trial_dir, trial_num):
             start = time.time()
             estimate = pc(data, indep_test="fisherz", alpha=ges.ALPHA)
             end = time.time()
+            metrics = {"time": end - start}
+        elif baseline == "notears":
+            print(f"Running Notears for {trial_dir}...")
+            start = time.time()
+            sm = from_numpy(data)
+            sm.threshold_till_dag()
+            end = time.time()
+            G = nx.to_numpy_array(sm)
+            G[G == 0] = 0.0
+            G[G != 0] = 1.0
+            G = G.astype(int)
+            estimate = utils.dag_to_cpdag(G)
             metrics = {"time": end - start}
 
         np.save(estimate_file_path, estimate)
