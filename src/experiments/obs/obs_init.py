@@ -1,4 +1,5 @@
-# Experiment to assess the effect of initialization on GES, GES+ performance
+# Experiments with random graphs and observational data
+# Including prior assumptions
 
 import ges.ges as ges
 import ges.ges.utils as utils
@@ -8,7 +9,6 @@ import json
 import random
 from src.experiments.utils import RANDOM_SEED, get_random_data, cpdag_shd
 from sempler.generators import dag_avg_deg
-from causallearn.utils.cit import CIT
 
 
 np.random.seed(RANDOM_SEED)
@@ -16,7 +16,6 @@ random.seed(RANDOM_SEED)
 
 NUM_GRAPHS = 50
 NUM_NODES = [10, 20, 30, 40, 50]
-# NUM_SAMPLES = [1000, 10000]
 NUM_SAMPLES = [1000]
 FRACTION_CORRECT = [0.0, 0.25, 0.5, 0.75, 1.0]
 DEGREE = 2
@@ -143,10 +142,7 @@ if __name__ == "__main__":
 
     d = DEGREE
     model = "linear-gaussian"
-    # settings = ["Without CIs", "With CI Test"]
-    settings = ["With CI Test"]
-    ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
-
+   
     
     configs = [("Without CIs", "no_init"), # GES without initialization
                ("Without CIs", "init"),    # GES with initialization
@@ -215,12 +211,6 @@ if __name__ == "__main__":
                         score_class = ges.scores.GaussObsL0Pen(data)
                     elif model == "multinomial":
                         score_class = ges.scores.DiscreteObsL0Pen(data)
-                    ci_test = CIT(data, ci_test_type[model])
-                    ci = {"Without CIs": None,
-                          "With CI Score": None,
-                          "Prune With CI Score": None,
-                          }
-
 
                     for ci_type, init_type in configs:
                         init_dir = os.path.join(trial_dir, init_type)
@@ -261,8 +251,6 @@ if __name__ == "__main__":
                         else:
                             for fc in FRACTION_CORRECT:
 
-
-                                # assume that with cis => prune
                                 metrics_file_path = os.path.join(init_dir, f"metrics_{ci_type.replace(' ', '_').lower()}_fc_{fc}_{i}.json")
                                 estimate_file_path = os.path.join(init_dir, f"estimate_{ci_type.replace(' ', '_').lower()}_fc_{fc}_{i}.npy")
                                 

@@ -1,11 +1,10 @@
-# Random graphs of n <= 10 nodes
-# Compare quality of output graph
-# No background knowledge
+# Experiments with random graphs and observational data
+# No prior asssumptions
 
 import random
 import numpy as np
 import ges.ges as ges
-from src.experiments.utils import METRICS_KEYS, MetricsEvaluator, CIOracle, RANDOM_SEED, get_random_dag, get_random_data
+from src.experiments.utils import METRICS_KEYS, RANDOM_SEED, get_random_dag, get_random_data
 import ges.ges.utils as utils
 from causallearn.utils.cit import CIT
 import argparse
@@ -143,16 +142,15 @@ if __name__ == "__main__":
     model = args.model
     run_baselines = args.run_baselines
 
-    settings = ["Without CIs", 
-                "With CI Score",
-                "Prune With CI Score",]
+    settings = ["Without CIs", # Standard GES
+                "With CI Score", # LGES with SafeInsert
+                "Prune With CI Score", # LGES with ConservativeInsert
+                ]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
     
 
-    # Create a results directory if it doesn't exist
     results_dir = "results_no_prior"
     os.makedirs(results_dir, exist_ok=True)
-    # Change the working directory to the results directory
     os.chdir(results_dir)
 
     for p in num_vars:
@@ -169,26 +167,25 @@ if __name__ == "__main__":
 
                     
                     print(f"Running graph {i}/{num_graphs-1} for key: {key}")
-                    # Create a directory for this trial
                     trial_dir = os.path.join(key, f"trial_{i}")
                     os.makedirs(trial_dir, exist_ok=True)
-                    # Check if data already exists for the current experiment
+
+                    
                     dag_file_path = os.path.join(trial_dir, f"dag_{i}.npy")
                     data_file_path = os.path.join(trial_dir, f"data_{i}.npy")
 
+                    # Check if DAG already exists for the current experiment
                     if os.path.exists(dag_file_path):
                         print(f"DAG already exists for key: {key}. Loading DAG...")
-                        # Load the DAG from the existing file
                         G = np.load(dag_file_path)
                     else:
                         # Generate a random DAG
-                        #  G = get_random_dag(p, d, random_state=RANDOM_SEED + i)
                         G = dag_avg_deg(p, d, 1, 1, random_state=RANDOM_SEED + i)
                         np.save(dag_file_path, G)
 
+                    # Check if data already exists for the current experiment
                     if os.path.exists(data_file_path):
                         print(f"Data already exists for key: {key}. Loading data...")
-                        # Load the data from the existing file
                         data = np.load(data_file_path)
                     else:
                         # Generate random data
@@ -246,7 +243,6 @@ if __name__ == "__main__":
                             if prune:
                                 print("pruning is enabled in obs_no_prior")
                             estimate, metrics = ges.fit(score_class, 
-                                                        phases=["forward", "forward-restart", "backward", "turning"] if "Restart" in setting else ["forward", "backward", "turning"],
                                                         prune=prune,
                                                         score_based=score_based,)
                             
@@ -255,6 +251,7 @@ if __name__ == "__main__":
                             with open(metrics_file_path, "w") as metrics_file:
                                 json.dump(metrics, metrics_file, indent=4)
 
+                        # Run baselines if the flag is set
                         if run_baselines:
                             run_obs_baselines(data, trial_dir, i)
                         

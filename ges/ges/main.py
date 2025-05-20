@@ -149,10 +149,10 @@ def fit(
     phases=["forward", "backward", "turning"],
     iterate=False,
     debug=0,
-    prune=False,
     score_based=False,
-    forbidden=None,
+    prune=False,
     required=None,
+    forbidden=None,
 ):
     """Run GES using a user defined score.
 
@@ -180,13 +180,24 @@ def fit(
     debug : int, optional
         if larger than 0, debug are traces printed. Higher values
         correspond to increased verbosity.
+    score_based: bool
+        if True, use LGES. Defaults to False.
+    prune: bool
+        if True, use ConservativeInsert. Defaults to False.
+    required: np.array
+        a matrix of required edges, where A[i,j] = 1 and A[j,i] = 0 implies i -> j
+        and A[i,j] = A[j,i] != 0 implies i - j. Defaults to None.
+    forbidden: np.array
+        a matrix of forbidden edges, where A[i,j] = 1 and A[j,i] = 0 implies i -> j
+        and A[i,j] = A[j,i] != 0 implies i - j. Defaults to None.
 
     Returns
     -------
     estimate : np.array
         the adjacency matrix of the estimated CPDAG
-    total_score : float
-        the score of the estimate
+    metrics : dict
+        a dictionary containing the runtime of the algorithm, the score of the estimate,
+        and metrics about the number of evaluated and actual insertions / deletions / turns
 
     """
     start = time.time()
@@ -215,12 +226,11 @@ def fit(
     A, score_change = A0, np.inf
     # Run each phase
     last_log_time = time.time()
-    print("Starting GES. Initial score: %0.4f" % total_score)
     while True:
         G = utils.pdag_to_dag(A)
         last_total_score = total_score
         for phase in phases:
-            if phase == "forward" or phase == "forward-restart":
+            if phase == "forward":
                 fun = forward_step
             elif phase == "backward":
                 fun = backward_step
@@ -240,7 +250,7 @@ def fit(
                                           max(0, debug - 1), 
                                           G=G, 
                                           score_based=score_based,
-                                          prune=False if phase == "forward-restart" else prune,
+                                          prune=prune,
                                           forbidden=forbidden,
                                           required=required)
                 if score_change > 1e-6:
@@ -500,7 +510,6 @@ def turning_step(A, cache, metrics,
         operator (not yet a CPDAG).
 
     """
-    #  global num_turns_eval
     # Construct edge candidates:
     #   - directed edges, reversed
     #   - undirected edges
