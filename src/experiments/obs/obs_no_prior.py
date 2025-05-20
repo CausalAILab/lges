@@ -52,16 +52,11 @@ avg_degree_list = {"sparse": [1.0],
                     
 NUM_GRAPHS = 50
 
-# Convert RuntimeWarning to an exception
-# warnings.filterwarnings("error", category=RuntimeWarning)
-
 
 def run_obs_baselines(data, trial_dir, trial_num):
 
-    # Run XGES with deletions before insertions heuristic 
-    # Run PC
-
-    baselines = ["xges", "pc", "notears"]
+    # baselines = ["pc", "notears"]
+    baselines = ["pc", "notears_threshold"]
 
     for baseline in baselines:
         # Check if the baseline already exists
@@ -79,13 +74,7 @@ def run_obs_baselines(data, trial_dir, trial_num):
             continue
 
         # Run the baseline method
-        if baseline == "xges":
-            print(f"Running XGES for {trial_dir}...")
-            score_class = ges.scores.GaussObsL0Pen(data)
-            estimate, metrics = ges.fit_xges(score_class)
-            # Save the estimate and metrics to a file
-            
-        elif baseline == "pc":
+        if baseline == "pc":
             # Run PC
             print(f"Running PC for {trial_dir}...")
             start = time.time()
@@ -96,6 +85,18 @@ def run_obs_baselines(data, trial_dir, trial_num):
             print(f"Running Notears for {trial_dir}...")
             start = time.time()
             sm = from_numpy(data)
+            sm.threshold_till_dag()
+            end = time.time()
+            G = nx.to_numpy_array(sm)
+            G[G == 0] = 0.0
+            G[G != 0] = 1.0
+            G = G.astype(int)
+            estimate = utils.dag_to_cpdag(G)
+            metrics = {"time": end - start}
+        elif baseline == "notears_threshold":
+            print(f"Running Notears Threshold 0.1 for {trial_dir}...")
+            start = time.time()
+            sm = from_numpy(data, w_threshold=0.1)
             sm.threshold_till_dag()
             end = time.time()
             G = nx.to_numpy_array(sm)
@@ -117,7 +118,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run experiments with specified parameters.")
     parser.add_argument("-p", "--num_vars", type=str, help=f"Size of graphs for the experiment (options: {', '.join(num_vars_list.keys())} or a single integer). Default: medium.")
     parser.add_argument("-n", "--num_samples", type=str, help=f"Size of sample for the experiment (options: {', '.join(num_samples_list.keys())} or a single integer). Default: medium.")
-    parser.add_argument("-d", "--avg_degree", type=str, help=f"Graph density for the experiment (options: {', '.join(avg_degree_list.keys())} or a single float). Default: medium.")
+    parser.add_argument("-d", "--avg_degree", type=str, help=f"Graph degree for the experiment (options: {', '.join(avg_degree_list.keys())} or a single float). Default: 2.0.")
     parser.add_argument("-g", "--num_graphs", type=int, default=NUM_GRAPHS, help=f"Number of graphs for the experiment (default: {NUM_GRAPHS}).")
     parser.add_argument("-m", "--model", choices=["multinomial", "linear-gaussian"], default="linear-gaussian", help="Model type for data generation (options: multinomial, linear-gaussian). Default: linear-gaussian.")
     parser.add_argument("-b", "--run_baselines", action="store_true", help="Flag to indicate whether to run baseline methods (default: False).")

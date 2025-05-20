@@ -78,17 +78,6 @@ def construct_init_dag(required, forbidden=None):
         else:
             G[i][j] = 0
             G[j][i] = 1
-
-    # # Check that the resulting graph is a DAG
-    # if not utils.is_dag(G):
-    #     print("G:", G)
-    #     print("required:", required)
-    #     print("forbidden:", forbidden)
-    #     raise ValueError("The resulting graph is not a DAG.")
-    
-    # # Check that the resulting graph has the same skeleton as the required graph
-    # if not np.array_equal(utils.skeleton(G), utils.skeleton(required)):
-    #     raise ValueError("The resulting graph has a different skeleton than the required graph.")
     
     return G
   
@@ -261,7 +250,6 @@ if __name__ == "__main__":
                             # Fit the model with the specified CI setting
                             print(f"Running GES for init {init_type}, ci_type {ci_type}, graph: {i}")
                             estimate, metrics = ges.fit(score_class, 
-                                                        ci=ci[ci_type],
                                                         prune=prune,
                                                         score_based=score_based,)
 
@@ -295,7 +283,6 @@ if __name__ == "__main__":
 
                                 # Fit the model with the specified CI setting
                                 estimate, metrics = ges.fit(score_class, 
-                                                            ci=ci[ci_type], 
                                                             prune=prune,
                                                             score_based=score_based,
                                                             A0=A0 if init_type == "init" else None,
