@@ -142,10 +142,7 @@ if __name__ == "__main__":
     model = args.model
     run_baselines = args.run_baselines
 
-    #  settings = ["Without CIs", "With CI Oracle", "With CI Test", "Prune With CI Test"]
     settings = ["Without CIs", 
-                # "With CI Test", 
-                # "Prune With CI Test",
                 "With CI Score",
                 "Prune With CI Score",]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
@@ -220,17 +217,6 @@ if __name__ == "__main__":
                             score_class = ges.scores.GaussObsL0Pen(data)
                         elif model == "multinomial":
                             score_class = ges.scores.DiscreteObsL0Pen(data)
-                        ci_oracle = CIOracle(G)
-                        ci_test = CIT(data, ci_test_type[model])
-                        ci = {"Without CIs": None,
-                              "With CI Score": None,
-                              "Prune With CI Score": None,
-                              "With CI Oracle": ci_oracle, 
-                              "With CI Test": ci_test, 
-                              "Prune With CI Test": ci_test,
-                              "Prune With CI Test Restart": ci_test
-                              }
-
 
                         metrics_file_path = os.path.join(trial_dir, f"metrics__{i}.json")
                         if os.path.exists(metrics_file_path):
@@ -260,7 +246,6 @@ if __name__ == "__main__":
                                 print("pruning is enabled in obs_no_prior")
                             estimate, metrics = ges.fit(score_class, 
                                                         phases=["forward", "forward-restart", "backward", "turning"] if "Restart" in setting else ["forward", "backward", "turning"],
-                                                        ci=ci[setting], 
                                                         prune=prune,
                                                         score_based=score_based,)
                             

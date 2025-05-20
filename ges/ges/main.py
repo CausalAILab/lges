@@ -62,16 +62,13 @@ Additional modules / packages:
 import numpy as np
 import ges.ges.utils as utils
 from ges.ges.scores.gauss_obs_l0_pen import GaussObsL0Pen
-import networkx as nx
 import time
-from src.experiments.utils import CIOracle
-
 
 ALPHA = 0.05
 
 
 def fit_bic(
-    data, A0=None, phases=["forward", "backward", "turning"], ci=None, iterate=False, debug=0
+    data, A0=None, phases=["forward", "backward", "turning"], iterate=False, debug=0
 ):
     """Run GES on the given data, using the Gaussian BIC score
     (l0-penalized Gaussian Likelihood). The data is not assumed to be
@@ -151,7 +148,6 @@ def fit(
     A0=None,
     phases=["forward", "backward", "turning"],
     iterate=False,
-    ci=None,
     debug=0,
     prune=False,
     score_based=False,
@@ -201,7 +197,6 @@ def fit(
         "inserts_actual": 0,
         "deletes_actual": 0,
         "turns_actual": 0,
-        "cis_eval": set(),
         "score": 0,
         "time": 0,
     }
@@ -243,7 +238,6 @@ def fit(
                                           score_class, 
                                           metrics, 
                                           max(0, debug - 1), 
-                                          ci=ci, 
                                           G=G, 
                                           score_based=score_based,
                                           prune=False if phase == "forward-restart" else prune,
@@ -273,11 +267,7 @@ def fit(
     metrics["cis_eval"] = len(metrics["cis_eval"])
     metrics["score"] = last_total_score
 
-    if isinstance(ci, CIOracle):
-        # subtract time taken for oracle 
-        metrics["time"] = end - start - ci.dsep_total_time
-    else:
-        metrics["time"] = end - start
+    metrics["time"] = end - start
     return A, metrics
 
 def fit_interventional(score_class,
@@ -285,7 +275,6 @@ def fit_interventional(score_class,
                        A0=None,
                        phases=["forward", "backward", "turning"],
                        iterate=False,
-                       ci=None,
                        debug=0,
                        prune=False,
                        score_based=False,
@@ -322,7 +311,6 @@ def fit_xges(
     A0=None,
     phases=["fb", "turning"],
     iterate=False,
-    ci=None,
     debug=0,
     prune=False,
     score_based=False
@@ -401,7 +389,6 @@ def fit_xges(
                                     score_class, 
                                     metrics, 
                                     max(0, debug - 1), 
-                                    ci=ci, 
                                     G=G, 
                                     score_based=score_based)
                         
@@ -416,7 +403,6 @@ def fit_xges(
                                     score_class, 
                                     metrics, 
                                     max(0, debug - 1), 
-                                    ci=ci, 
                                     G=G, 
                                     score_based=score_based)
             if score_change > 1e-6:
@@ -431,7 +417,6 @@ def fit_xges(
                                     score_class, 
                                     metrics, 
                                     max(0, debug - 1), 
-                                    ci=ci, 
                                     G=G, 
                                     score_based=score_based)
                         
@@ -452,7 +437,6 @@ def fit_xges(
                                         score_class, 
                                         metrics, 
                                         max(0, debug - 1), 
-                                        ci=ci, 
                                         G=G, 
                                         score_based=score_based)
                 if score_change > 1e-6:
@@ -471,18 +455,12 @@ def fit_xges(
     metrics["ops_actual"] = metrics["inserts_actual"] + metrics["deletes_actual"] + metrics["turns_actual"]
     metrics["cis_eval"] = len(metrics["cis_eval"])
     metrics["score"] = last_total_score
-
-    if isinstance(ci, CIOracle):
-        # subtract time taken for oracle 
-        metrics["time"] = end - start - ci.dsep_total_time
-    else:
-        metrics["time"] = end - start
+    metrics["time"] = end - start
         
     return A, metrics
 
 def forward_step(A, cache, metrics, 
                  debug=0, 
-                 ci=None, 
                  G=None, 
                  prune=False,
                  score_based=False,
@@ -515,7 +493,7 @@ def forward_step(A, cache, metrics,
 
     """
     # global num_inserts_eval
-    if ci and G is None:
+    if score_based and G is None:
         G = utils.pdag_to_dag(A)
     # Construct edge candidates (i.e. edges between non-adjacent nodes)
     fro, to = np.where((A + A.T + np.eye(len(A))) == 0)
@@ -527,7 +505,7 @@ def forward_step(A, cache, metrics,
 
     for edge_candidates in priority_list:
         for x, y in edge_candidates:
-            if not check_legal_insert(A, cache, metrics, x, y, ci=ci, G=G, 
+            if not check_legal_insert(A, cache, metrics, x, y, G=G, 
                                   score_based=score_based):
                 continue
             ops, found_lower_scoring = score_valid_insert_operators(
@@ -560,15 +538,10 @@ def forward_step(A, cache, metrics,
 
 
 def check_legal_insert(A, cache, metrics, x, y, 
-                       ci=None, G=None, score_based=False):
+                       G=None, score_based=False):
 
-    if not ci and not score_based:
-        return True
 
-    if ci and score_based:
-        raise ValueError("Cannot use both CI and score-based pruning")
-
-    if G is None:
+    if score_based and G is None:
         raise ValueError("G must be provided if pruning is used")
     
     # check if it's legal to insert x -> y in G
@@ -576,15 +549,6 @@ def check_legal_insert(A, cache, metrics, x, y,
     # G_copy[x][y] = 1
     # if not utils.is_dag(G_copy):
     #     return False
-
-    if ci:
-        key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G)))
-        metrics["cis_eval"].add(key)
-        # Check for dependence; insert only if dependent
-        if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G))):
-            return False
-        elif ci(x, y, list(utils.pa(y, G))) > ALPHA:
-            return False
             
     if score_based:
         metrics["inserts_eval"] += 1
@@ -598,7 +562,6 @@ def check_legal_insert(A, cache, metrics, x, y,
 
 def backward_step(A, cache, metrics, 
                  debug=0, 
-                 ci=None, 
                  G=None, 
                  prune=False,
                  score_based=False,
@@ -630,9 +593,6 @@ def backward_step(A, cache, metrics,
         operator (not yet a CPDAG).
 
     """
-    # global num_deletes_eval
-    if ci and G is None:
-        G = utils.pdag_to_dag(A)
     # Construct edge candidates:
     #   - directed edges
     #   - undirected edges, counted only once
@@ -645,27 +605,7 @@ def backward_step(A, cache, metrics,
     # For each edge, enumerate and score all valid operators
     valid_operators = []
     print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None
-    minimal = True
-    if ci: # pruning mode
-        # check if graph is minimal i-map
-        for x, y in edge_candidates:
-            if x in utils.pa(y,G):
-                key = (frozenset({x}), frozenset({y}), frozenset(utils.pa(y, G) - {x}))
-                metrics["cis_eval"].add(key)
-                # check if graph is not a minimal i-map
-                # if it's not minimal, delete some edge
-                if isinstance(ci, CIOracle) and ci(x, y, list(utils.pa(y, G) - {x})):
-                    valid_operators += score_valid_delete_operators(
-                    x, y, A, cache, debug=max(0, debug - 1)
-                    )
-                    minimal = False
-                elif ci(x, y, list(utils.pa(y, G) - {x})) > ALPHA:
-                    valid_operators += score_valid_delete_operators(
-                    x, y, A, cache, debug=max(0, debug - 1)
-                    )
-                    minimal = False
-    if minimal or not ci:
-        for x, y in edge_candidates:
+    for x, y in edge_candidates:
             valid_operators += score_valid_delete_operators(
             x, y, A, cache, debug=max(0, debug - 1)
             )
@@ -685,7 +625,6 @@ def backward_step(A, cache, metrics,
 
 def turning_step(A, cache, metrics, 
                  debug=0, 
-                 ci=None, 
                  G=None, 
                  prune=False,
                  score_based=False,
@@ -1439,22 +1378,6 @@ def score_valid_turn_operators_undir(x, y, A, cache, debug=0):
         ) if debug else None
     # Return all valid operators
     return valid_operators
-
-
-# class CIOracle():
-
-#     def __init__(self, A):
-#         self.A = nx.DiGraph(A)
-#         # global cis_eval
-#         # cis_eval = set()
-        
-#     def __call__(self, X, Y, S=[]):
-#         """
-#         Test if X and Y are separated given Z in the DAG represented by
-#         the adjacency matrix A. Makes the instance callable.
-#         """
-#         key = (frozenset({X}), frozenset({Y}), frozenset(S))
-#         return nx.d_separated(self.A, {X}, {Y}, set(S))
 
 
 # To run the doctests
