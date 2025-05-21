@@ -55,7 +55,8 @@ NUM_GRAPHS = 50
 def run_obs_baselines(data, trial_dir, trial_num):
 
     # baselines = ["pc", "notears"]
-    baselines = ["pc", "notears_threshold"]
+    # baselines = ["pc", "notears_threshold"]
+    baselines = ["pc"]
 
     for baseline in baselines:
         # Check if the baseline already exists
@@ -142,10 +143,13 @@ if __name__ == "__main__":
     model = args.model
     run_baselines = args.run_baselines
 
-    settings = ["Without CIs", # Standard GES
-                "With CI Score", # LGES with SafeInsert
+    # settings = ["Without CIs", # Standard GES
+    #             "With CI Score", # LGES with SafeInsert
+    #             "Prune With CI Score", # LGES with ConservativeInsert
+    #             ]
+    settings = ["With CI Score", # LGES with SafeInsert
                 "Prune With CI Score", # LGES with ConservativeInsert
-                ]
+    ]
     ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
     
 
