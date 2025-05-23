@@ -94,9 +94,10 @@ src/experiments/exp/results_no_prior/vars_<NUM_VARS>_samples_<NUM_SAMPLES>_degre
 
 To generate the plots presented in the paper, use:
 ```bash
-cd src/experiments/
+cd src/experiments/obs
 python -m plot.py --plot obs_no_prior
 python -m plot.py --plot obs_init
+cd src/experiments/exp
 python -m plot.py --plot exp_no_prior
 ```
 
