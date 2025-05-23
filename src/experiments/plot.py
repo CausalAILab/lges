@@ -123,18 +123,14 @@ def plot_obs_no_prior():
     # Structure: metrics_data[metric][ci_type][num_nodes] = list of values
     metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     ci_types = ["Without CIs", 
-                # "With CI Score",
                 "LGES With CI Score",
                 "LGES Prune With CI Score",
-                # "Prune With CI Score",
-                #  "New With CI Score",
-                #  "New Prune With CI Score",
                 "PC",
                 "NoTears"
                 ]
 
     for folder in os.listdir(base_dir):
-        match = re.match(r"vars_(\d+)_samples_(1000)_degree_2.0_model_linear-gaussian", folder)
+        match = re.match(r"vars_(\d+)_samples_(10000)_degree_2.0_model_linear-gaussian", folder)
         if not match:
             continue
         num_nodes = int(match.group(1))
@@ -283,8 +279,6 @@ def plot_obs_no_prior():
         )
         plt.xlabel("Number of variables (p)")
         plt.ylabel(pretty_metric_names[metric] if metric in pretty_metric_names.keys() else metric)
-        # plt.yscale("log")
-        #  plt.title(f"{metric.capitalize()} vs Number of Nodes")
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.tight_layout()
         plt.legend(
@@ -300,9 +294,9 @@ def plot_obs_no_prior():
 
 
 
-def plot_fc_vs_metric_for_fixed_nvars(base_dir="./obs/results_init/0.5m",
+def plot_fc_vs_metric_for_fixed_nvars(base_dir="./obs/results_init",
                                       output_dir="./obs/plots_init",
-                                      fixed_nvars=30, max_std=20):
+                                      fixed_nvars=50, max_std=20):
     """
     One figure per metric (SHD, time)
     x-axis  : fraction-correct (fc)
@@ -319,8 +313,6 @@ def plot_fc_vs_metric_for_fixed_nvars(base_dir="./obs/results_init/0.5m",
     metrics_data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     ci_tags = {
         "Without CIs": "without_cis",
-        # "With CI Score": "with_ci_score",
-        # "Prune With CI Score": "prune_with_ci_score",
         "LGES With CI Score": "lges_with_ci_score",
         "LGES Prune With CI Score": "lges_prune_with_ci_score",
     }
