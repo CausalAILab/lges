@@ -99,6 +99,8 @@ def get_init_mec(true_dag, fraction_correct=1, directed_prob=DIRECTED_PROB, num_
     if num_edges is None:
         # Set num_edges in background knowledge to half of the number of edges in the true DAG
         num_edges = int(num_true // 2)
+        # Set num_edges in background knowledge to 3/4of the number of edges in the true DAG
+        # num_edges = int(3 * num_true // 4)
 
     if num_true == 0:
         print("True DAG is empty. No edges to select.")
@@ -145,11 +147,13 @@ if __name__ == "__main__":
    
     
     configs = [("Without CIs", "no_init"), # GES without initialization
-               ("Without CIs", "init"),    # GES with initialization
-               ("With CI Score", "init"),    # LGES with safe insert and initialization
-               ("With CI Score", "req"),      # LGES with safe insert and priority insertion
-               ("Prune With CI Score", "init"),    # LGES with safe insert and initialization
-               ("Prune With CI Score", "req")      # LGES with safe insert and priority insertion
+                ("Without CIs", "init"),    # GES with initialization
+                ("LGES with CI Score", "no_init"),
+                ("LGES Prune With CI Score", "no_init"),
+                ("LGES With CI Score", "init"),    # LGES with safe insert and initialization
+               ("LGES With CI Score", "req"),      # LGES with safe insert and priority insertion
+               ("LGES Prune With CI Score", "init"),    # LGES with safe insert and initialization
+               ("LGES Prune With CI Score", "req")      # LGES with safe insert and priority insertion
                ]
    
     

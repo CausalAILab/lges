@@ -38,10 +38,6 @@ num_samples_list = {"small": [500,1000],
                     "large": [100000,500000],
                     "very_large": [1000000]
                    }
-# avg_density_list = {"sparse": [0.01, 0.05],
-#                     "medium": [0.1, 0.2],
-#                     "dense": [0.3, 0.4]
-#                    }
 
 avg_degree_list = {"sparse": [1.0],
                     "medium": [2.0],
@@ -54,9 +50,9 @@ NUM_GRAPHS = 50
 
 def run_obs_baselines(data, trial_dir, trial_num):
 
-    # baselines = ["pc", "notears"]
+    baselines = ["pc", "notears"]
     # baselines = ["pc", "notears_threshold"]
-    baselines = ["pc"]
+    #  baselines = ["pc"]
 
     for baseline in baselines:
         # Check if the baseline already exists
@@ -143,14 +139,17 @@ if __name__ == "__main__":
     model = args.model
     run_baselines = args.run_baselines
 
-    # settings = ["Without CIs", # Standard GES
-    #             "With CI Score", # LGES with SafeInsert
-    #             "Prune With CI Score", # LGES with ConservativeInsert
-    #             ]
-    settings = ["With CI Score", # LGES with SafeInsert
-                "Prune With CI Score", # LGES with ConservativeInsert
-    ]
-    ci_test_type = {"linear-gaussian": "fisherz", "multinomial": "chisq"}
+
+    if run_baselines:
+        settings = ["Without CIs", # Standard GES 
+                    "LGES With CI Score", # LGES with SafeInsert
+                    "LGES Prune With CI Score", # LGES with ConservativeInsert
+        ]
+    else:
+        settings = ["LGES With CI Score", # LGES with SafeInsert
+                    "LGES Prune With CI Score", # LGES with ConservativeInsert
+        ]
+
     
 
     results_dir = "results_no_prior"

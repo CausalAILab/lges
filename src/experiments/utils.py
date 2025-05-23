@@ -10,7 +10,6 @@ import sempler
 from src.scm.ctm import CTM
 import time 
 
-
 # Set a random seed for reproducibility
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)
@@ -50,6 +49,16 @@ def get_random_dag(num_vars, avg_degree, random_state=RANDOM_SEED):
 
     return G
 
+def make_l1_row_normalized_W(G, row_sum_target=0.9):
+    W = G * np.random.choice([-1, 1], size=G.shape) * np.random.uniform(0.5, 2.0, size=G.shape)
+    np.fill_diagonal(W, 0)
+
+    # L1 normalize each row
+    row_sums = np.sum(np.abs(W), axis=1, keepdims=True)
+    row_sums = np.maximum(row_sums, 1e-8)  # avoid division by 0
+    W = W / row_sums * row_sum_target
+
+    return W
 
 def get_random_data(G, num_samples, model="linear-gaussian", interventions=[{}], random_state=RANDOM_SEED):
     """
@@ -79,10 +88,18 @@ def get_random_data(G, num_samples, model="linear-gaussian", interventions=[{}],
                 # sample noise variances from U(0.1, 0.5)
                 noise_variances = np.random.uniform(0.1, 0.5, size=G.shape[0])
                 sampler = sempler.LGANM(W, noise_means, noise_variances, random_state=random_state)
+                # Check if any diagonal elements of W are nonzero
                 data = [sampler.sample(n=num_samples if len(i)==0 else int(num_samples//10), do_interventions=i) for i in interventions]
                 return data 
-        except RuntimeWarning as e:
-            return []  # Return empty to indicate failure
+        except Exception as e:
+            print(f"Error generating data: {e}. Trying with normalized matrix.")
+            W = make_l1_row_normalized_W(G)
+            noise_means = np.random.normal(0, 1, size=G.shape[0])
+            # sample noise variances from U(0.1, 0.5)
+            noise_variances = np.random.uniform(0.1, 0.5, size=G.shape[0])
+            sampler = sempler.LGANM(W, noise_means, noise_variances, random_state=random_state)
+            data = [sampler.sample(n=num_samples if len(i)==0 else int(num_samples//10), do_interventions=i) for i in interventions]
+            return data 
     elif model == "multinomial":
         # Generate random multinomial data
         ctm = CTM(G, random_state=random_state)
@@ -131,6 +148,34 @@ def cpdag_shd(target, estimate):
     edit_distance = false_positives + false_negatives + wrong_orientations
     
     return edit_distance, false_positives, false_negatives, wrong_orientations
+
+def compute_f1(target, estimate):
+
+    def contains_edge(G, i, j):
+        return G[i, j] == 1 # may contain i -> j or i - j, but not j -> i
+
+    t = target.copy()
+    e = estimate.copy()
+
+    tp, tn, fp, fn = 0, 0, 0, 0
+    for i in range(t.shape[0]):
+        for j in range(t.shape[1]):
+            if contains_edge(t, i, j) and not contains_edge(e, i, j):
+                fp += 1
+            elif contains_edge(e, i, j) and not contains_edge(t, i, j):
+                fn += 1
+            elif contains_edge(t, i, j) and contains_edge(e, i, j):
+                tp += 1
+            elif not contains_edge(t, i, j) and not contains_edge(e, i, j):
+                tn += 1
+
+    
+    # Calculate precision, recall, and F1 score
+    precision = 0 if (tp + fp) == 0 else tp / (tp + fp)
+    recall = 0 if (tp + fn) == 0 else tp / (tp + fn)
+    f1_score = 0 if (precision + recall) == 0 else 2 * (precision * recall) / (precision + recall)
+
+    return precision, recall, f1_score
 
 
 class MetricsEvaluator:

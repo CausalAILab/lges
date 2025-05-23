@@ -1,14 +1,23 @@
-import ges
+import ges.ges as ges
 import ges.ges.utils as utils
 from causallearn.utils.cit import CIT
-import pooch
 import pandas as pd
 import numpy as np
+from src.experiments.utils import cpdag_shd
+import urllib.request
+import os
+import time
 
 # Fetch and preprocess observational data
 def fetch_and_preprocess_data(url):
     # Use pooch to robustly download the data
-    file_path = pooch.retrieve(url=url, known_hash=None)
+    # Define the file path
+    file_path = "/tmp/sachs_discretised.txt.gz"
+
+    # Download using urllib if file doesn't exist
+    if not os.path.exists(file_path):
+        with urllib.request.urlopen(url) as response, open(file_path, 'wb') as out_file:
+            out_file.write(response.read())
     # Read the data
     df = pd.read_csv(file_path, delimiter=" ")
     df_mapped = df.copy()
@@ -20,6 +29,18 @@ def fetch_and_preprocess_data(url):
         df_mapped[col] = df[col].map(bin_mapping)
 
     return df_mapped
+
+def print_mec(mec):
+    for i in range(mec.shape[0]):
+        for j in range(mec.shape[1]):
+            if mec[i, j] == 1 and mec[j, i] == 0:
+                src = list(node_mapping.keys())[list(node_mapping.values()).index(i)]
+                dst = list(node_mapping.keys())[list(node_mapping.values()).index(j)]
+                print(f"Edge: {src} -> {dst}")
+            elif mec[j, i] == 1 and mec[i, j] == 1 and i < j:
+                src = list(node_mapping.keys())[list(node_mapping.values()).index(i)]
+                dst = list(node_mapping.keys())[list(node_mapping.values()).index(j)]
+                print(f"Edge: {src} - {dst}")
 
 # Define the Sachs graph structure
 def define_sachs_graph():
@@ -62,54 +83,117 @@ def define_supplemental_graph():
 
     return utils.pdag_to_dag(sachs_supplemental_graph)
 
-# Evaluate a graph using GES
-def evaluate_graph(score_class, input_graph=None,ci=None):
-
-    if input_graph is not None:
-        score = score_class.full_score(input_graph)
-    estimate, estimated_score, metrics = ges.fit(score_class, A0=input_graph, ci=ci)
-    metrics["cis_eval"] = len(metrics["cis_eval"])
-
-    if input_graph is not None:
-
-        print("Score of input graph:", score)
-
-    print("Score of estimated graph:", estimated_score)
-    print("Metrics:", metrics)
-
-    if input_graph is not None:
-        edit_distance = np.sum(input_graph != estimate)
-        print("Edit distance between input graph and estimate:", edit_distance)
 
 # Main execution
 if __name__ == "__main__":
-    # Fetch and preprocess data
+   
+
+    # Define Sachs graph
+    sachs_graph, node_mapping = define_sachs_graph()
+    sachs_mec = utils.dag_to_cpdag(sachs_graph)
+
+    # Experiment with discretized data
     url = "https://www.bnlearn.com/book-crc/code/sachs.discretised.txt.gz"
     df = fetch_and_preprocess_data(url)
     data = df.to_numpy()
 
-    # Define Sachs graph
-    sachs_graph, node_mapping = define_sachs_graph()
+    score_class = ges.scores.DiscreteObsL0Pen(data)
 
-    # Initialize score class
+    print("Discretized Data")
+
+    # run GES
+    start = time.time()
+    estimate_ges, metrics = ges.fit(score_class)
+    end = time.time()
+    print("GES SHD:", cpdag_shd(sachs_mec, estimate_ges))
+    print("GES Time:", end - start)
+
+    # run LGES with ConservativeInsert
+    start = time.time()
+    estimate_lges_cons, metrics = ges.fit(score_class,
+                                          score_based=True,
+                                          prune=True)
+    end = time.time()
+    print("LGES (Cons) SHD:", cpdag_shd(sachs_mec, estimate_lges_cons))
+    print("LGES (Cons) Time:", end - start)
+
+    # run LGES with SafeInsert
+    start = time.time()
+    estimate_lges_safe, metrics = ges.fit(score_class,
+                                          score_based=True,
+                                          prune=False)
+    end = time.time()
+    print("LGES (Safe) SHD:", cpdag_shd(sachs_mec, estimate_lges_safe))
+    print("LGES (Safe) Time:", end - start)
+
+    # Check if SHD between GES and LGES estimates is 0
+    shd_ges_lges_cons = cpdag_shd(estimate_ges, estimate_lges_cons)
+    shd_ges_lges_safe = cpdag_shd(estimate_ges, estimate_lges_safe)
+    shd_lges_lges = cpdag_shd(estimate_lges_cons, estimate_lges_safe)
+    print("SHD between GES and LGES (Cons):", shd_ges_lges_cons)
+    print("SHD between GES and LGES (Safe):", shd_ges_lges_safe)
+    print("SHD between LGES (Cons) and LGES (Safe):", shd_lges_lges)
+
+    
+    # Print the true DAG
+    print("True MEC (Sachs Graph):")
+    print_mec(sachs_mec)
+    
+    # Print the GES estimate
+    print("GES Estimated MEC:")
+    print_mec(estimate_ges)
+
+
+    # Experiment with continuous data
+    print("Continuous Data")
+
+    # Read the file into a numpy array
+    file_path = "./sachs_data.txt"
+
+    # Ensure the file exists
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"The file {file_path} does not exist.")
+
+    # Read the file into a pandas DataFrame and convert to numpy array
+    df = pd.read_csv(file_path, delimiter="\t")
+    data = df.to_numpy()
+    
+
     score_class = ges.scores.GaussObsL0Pen(data)
 
-    ci_chisq = CIT(data, method="chisq")
+    # run GES
+    start = time.time()
+    estimate_ges, metrics = ges.fit(score_class)
+    end = time.time()
+    print("GES SHD:", cpdag_shd(sachs_mec, estimate_ges))
+    print("GES Time:", end - start)
 
-    for ci in [None, ci_chisq]:
+    # run LGES with ConservativeInsert
+    start = time.time()
+    estimate_lges_cons, metrics = ges.fit(score_class,
+                        score_based=True,
+                        prune=True)
+    end = time.time()
+    print("LGES (Cons) SHD:", cpdag_shd(sachs_mec, estimate_lges_cons))
+    print("LGES (Cons) Time:", end - start)
 
-        print(f"\n---RUNNING WITH CI: {ci is not None}\n")
-        # Evaluate without initialization   
-        print("Running without initialization:")
-        evaluate_graph(score_class, ci=ci)
+    # run LGES with SafeInsert
+    start = time.time()
+    estimate_lges_safe, metrics = ges.fit(score_class,
+                        score_based=True,
+                        prune=False)
+    end = time.time()
+    print("LGES (Safe) SHD:", cpdag_shd(sachs_mec, estimate_lges_safe))
+    print("LGES (Safe) Time:", end - start)
 
-         # Evaluate Sachs graph
-        print("Running with Sachs graph as input:")
-        evaluate_graph(score_class, input_graph=utils.dag_to_cpdag(sachs_graph), ci=ci)
+    # Check if SHD between GES and LGES estimates is 0
+    shd_ges_lges_cons = cpdag_shd(estimate_ges, estimate_lges_cons)
+    shd_ges_lges_safe = cpdag_shd(estimate_ges, estimate_lges_safe)
+    shd_lges_lges = cpdag_shd(estimate_lges_cons, estimate_lges_safe)
+    print("SHD between GES and LGES (Cons):", shd_ges_lges_cons)
+    print("SHD between GES and LGES (Safe):", shd_ges_lges_safe)
+    print("SHD between LGES (Cons) and LGES (Safe):", shd_lges_lges)
 
-        # Define and evaluate supplemental graph
-        # sachs_supplemental_graph = define_supplemental_graph()
-
-        # print("Running with supplemental Sachs graph as input:")
-        # evaluate_graph(score_class, input_graph=utils.dag_to_cpdag(sachs_supplemental_graph), ci=ci)
-
+    # Print the GES estimate
+    print("GES Estimated MEC:")
+    print_mec(estimate_ges)

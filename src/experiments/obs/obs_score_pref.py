@@ -1,6 +1,7 @@
 import numpy as np
 import sempler
 import ges.ges as ges
+from src.experiments.utils import cpdag_shd
 
 
 
@@ -12,6 +13,7 @@ G = np.array([
     [0, 0, 0, 0],  # X2
     [0, 0, 0, 0]   # Y
 ])
+
 
 
 # compare graphs

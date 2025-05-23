@@ -227,7 +227,6 @@ def fit(
     # Run each phase
     last_log_time = time.time()
     while True:
-        G = utils.pdag_to_dag(A)
         last_total_score = total_score
         for phase in phases:
             if phase == "forward":
@@ -241,9 +240,11 @@ def fit(
             print("\nGES %s phase start" % phase) if debug else None
             print("-------------------------") if debug else None
             while True:
-                if time.time() - last_log_time > 30:
-                    print("Total score: %0.4f" % total_score)
-                    last_log_time = time.time()
+                if time.time() - start > 1e4:
+                    print("Algorithm timed out")
+                    print("Time taken (s):", time.time() - start)
+                    return A, metrics
+                G = utils.pdag_to_dag(A)
                 score_change, new_A = fun(A,
                                           score_class, 
                                           metrics, 
@@ -346,7 +347,6 @@ def forward_step(A, cache, metrics,
         operator (not yet a CPDAG).
 
     """
-    # global num_inserts_eval
     if score_based and G is None:
         G = utils.pdag_to_dag(A)
     # Construct edge candidates (i.e. edges between non-adjacent nodes)
@@ -397,13 +397,7 @@ def check_legal_insert(A, cache, metrics, x, y,
 
     if score_based and G is None:
         raise ValueError("G must be provided if pruning is used")
-    
-    # check if it's legal to insert x -> y in G
-    # G_copy = G.copy()
-    # G_copy[x][y] = 1
-    # if not utils.is_dag(G_copy):
-    #     return False
-            
+
     if score_based:
         metrics["inserts_eval"] += 1
         if cache is None:
