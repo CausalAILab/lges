@@ -42,7 +42,7 @@ num_samples_list = {"small": [500,1000],
 avg_degree_list = {"sparse": [1.0],
                     "medium": [2.0],
                     "dense": [3.0],
-                    "verydense": [4.0]
+                    "very_dense": [4.0]
                    }
                     
 NUM_GRAPHS = 50
@@ -50,9 +50,9 @@ NUM_GRAPHS = 50
 
 def run_obs_baselines(data, trial_dir, trial_num):
 
-    baselines = ["pc", "notears"]
+    # baselines = ["pc", "notears"]
     # baselines = ["pc", "notears_threshold"]
-    #  baselines = ["pc"]
+    baselines = ["pc"]
 
     for baseline in baselines:
         # Check if the baseline already exists
@@ -142,6 +142,7 @@ if __name__ == "__main__":
 
     if run_baselines:
         settings = ["Without CIs", # Standard GES 
+                    "XGES Without CIs", # XGES-0 with deletes before reversals before inserts
                     "LGES With CI Score", # LGES with SafeInsert
                     "LGES Prune With CI Score", # LGES with ConservativeInsert
         ]
@@ -245,9 +246,15 @@ if __name__ == "__main__":
                             score_based = True if "Score" in setting else False
                             if prune:
                                 print("pruning is enabled in obs_no_prior")
-                            estimate, metrics = ges.fit(score_class, 
+                            
+                            if "XGES" in setting:
+                                estimate, metrics = ges.xges_fit(score_class, 
                                                         prune=prune,
                                                         score_based=score_based,)
+                            else:
+                                estimate, metrics = ges.fit(score_class, 
+                                                            prune=prune,
+                                                            score_based=score_based,)
                             
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)
