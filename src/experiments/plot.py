@@ -130,7 +130,7 @@ def plot_obs_no_prior():
                 ]
 
     for folder in os.listdir(base_dir):
-        match = re.match(r"vars_(\d+)_samples_(10000)_degree_2.0_model_linear-gaussian", folder)
+        match = re.match(r"vars_(\d+)_samples_(\d+)_degree_([\d.]+)_model_(linear-gaussian|multinomial)", folder)
         if not match:
             continue
         num_nodes = int(match.group(1))
@@ -321,7 +321,7 @@ def plot_fc_vs_metric_for_fixed_nvars(base_dir="./obs/results_init",
     rcParams.update({'font.size': 14})
 
     for folder in os.listdir(base_dir):
-        m = re.match(r"vars_(\d+)_samples_1000_degree_2_model_linear-gaussian", folder)
+        m = re.match(r"vars_(\d+)_samples_(\d+)_degree_([\d.]+)_model_(linear-gaussian|multinomial)", folder)
         if not m or int(m.group(1)) != fixed_nvars:
             continue
         for trial in os.listdir(os.path.join(base_dir, folder)):
@@ -465,7 +465,7 @@ def plot_exp_no_prior():
     rcParams.update({'font.size': 14})
 
     for folder in os.listdir(base_dir):
-        match = re.match(r"vars_(\d+)_samples_10000_degree_2.0_model_linear-gaussian", folder)
+        match = re.match(r"vars_(\d+)_samples_(\d+)_degree_([\d.]+)_model_(linear-gaussian|multinomial)", folder)
         if not match:
             continue
         num_nodes = int(match.group(1))
