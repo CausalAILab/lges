@@ -326,6 +326,7 @@ def xges_fit(
     prune=False,
     required=None,
     forbidden=None,
+    forbidden_insert=None,
 ):
     """Run XGES-0 using a user defined score.
     Prioritize deletions before insertions.
@@ -468,7 +469,8 @@ def xges_fit(
                                             score_based=score_based,
                                             prune=prune,
                                             forbidden=forbidden,
-                                            required=required)
+                                            required=required,
+                                            forbidden_insert=forbidden_insert)
 
             if score_change > 1e-6:
                 metrics["inserts_actual"] += 1
@@ -494,13 +496,119 @@ def xges_fit(
     metrics["time"] = end - start
     return A, metrics
 
+
+def full_xges_fit(
+    score_class,
+    completion_algorithm=None,
+    A0=None,
+    phases=["forward", "backward", "turning"],
+    iterate=False,
+    debug=0,
+    score_based=False,
+    prune=False,
+    required=None,
+    forbidden=None,
+):
+
+    # TODO: fix calculation of metrics. Right now, only time is being calculated accurately.
+    start = time.time()
+
+    A, metrics = xges_fit(score_class=score_class,
+                                 completion_algorithm=completion_algorithm,
+                                 A0=A0,
+                                 phases=phases,
+                                 iterate=iterate,
+                                 debug=debug,
+                                 score_based=score_based,
+                                 prune=prune,
+                                 required=required,
+                                 forbidden=forbidden,
+                                 forbidden_insert=None)
+
+    # TODO: implement count of full metrics actual turns, deletions, and insertions
+    full_metrics = metrics.copy()
+    # Find  valid deletes for A
+    fro, to = np.where(utils.only_directed(A))
+    directed_edges = zip(fro, to)
+    fro, to = np.where(utils.only_undirected(A))
+    undirected_edges = filter(lambda e: e[0] > e[1], zip(fro, to))  # zip(fro,to)
+    edge_candidates = list(directed_edges) + list(undirected_edges)
+    assert len(edge_candidates) == utils.skeleton(A).sum() / 2
+    # For each edge, enumerate and score all valid operators
+    valid_operators = []
+    print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None
+    for x, y in edge_candidates:
+            valid_operators += score_valid_delete_operators(
+            x, y, A, score_class, debug=max(0, debug - 1)
+            )
+    metrics["deletes_eval"] += len(valid_operators)
+
+
+    while len(valid_operators) > 0:
+        # Apply highest-scoring valid delete to A
+        scores = [op[0] for op in valid_operators]
+        score, deleted_A, x, y, H = valid_operators[np.argmax(scores)]
+        print(
+            "  Best operator: delete(%d, %d, %s) -> (%0.4f)" % (x, y, H, score)
+        ) if debug else None
+
+        new_A, new_metrics = xges_fit(score_class=score_class,
+                    completion_algorithm=completion_algorithm,
+                    A0=utils.pdag_to_cpdag(deleted_A),
+                    phases=phases,
+                    iterate=iterate,
+                    debug=debug,
+                    score_based=score_based,
+                    prune=prune,
+                    required=required,
+                    forbidden=forbidden,
+                    forbidden_insert=(x,y))
+
+        full_metrics["inserts_eval"] += new_metrics["inserts_eval"]
+        full_metrics["deletes_eval"] += new_metrics["deletes_eval"]
+        full_metrics["turns_eval"] += new_metrics["turns_eval"]
+
+        
+        if score_class.full_score(new_A) > score_class.full_score(A):
+            # restart procedure from new A
+            A = new_A
+            # Find  valid deletes for A
+            fro, to = np.where(utils.only_directed(A))
+            directed_edges = zip(fro, to)
+            fro, to = np.where(utils.only_undirected(A))
+            undirected_edges = filter(lambda e: e[0] > e[1], zip(fro, to))  # zip(fro,to)
+            edge_candidates = list(directed_edges) + list(undirected_edges)
+            assert len(edge_candidates) == utils.skeleton(A).sum() / 2
+            # For each edge, enumerate and score all valid operators
+            valid_operators = []
+            print("  %d candidate edges" % len(edge_candidates)) if debug > 1 else None
+            for x, y in edge_candidates:
+                    valid_operators += score_valid_delete_operators(
+                    x, y, A, score_class, debug=max(0, debug - 1)
+                    )
+            metrics["deletes_eval"] += len(valid_operators)
+        else:
+            # continue with previous A and try next highest scoring deletion
+            valid_operators.pop(np.argmax(scores))
+
+
+    print("  No valid delete operators remain") if debug else None
+        
+    end = time.time()
+    full_metrics["time"] = end - start
+    full_metrics["score"] = score_class.full_score(A)
+    full_metrics["ops_eval"] = full_metrics["inserts_eval"] + full_metrics["deletes_eval"] + full_metrics["turns_eval"] 
+
+    return A, full_metrics
+
 def forward_step(A, cache, metrics, 
                  debug=0, 
                  G=None, 
                  prune=False,
                  score_based=False,
                  forbidden=None,
-                 required=None):
+                 required=None,
+                 forbidden_insert=None):
     """
     Scores all valid insert operators that can be applied to the current
     CPDAG A, and applies the highest scoring one.
@@ -542,6 +650,9 @@ def forward_step(A, cache, metrics,
             if not check_legal_insert(A, cache, metrics, x, y, G=G, 
                                   score_based=score_based):
                 continue
+            if forbidden_insert and (x,y) == forbidden_insert:
+                # skip forbidden insert
+                continue    
             ops, found_lower_scoring = score_valid_insert_operators(
                         x, y, A, cache, debug=max(0, debug - 1), prune=prune
                     )
