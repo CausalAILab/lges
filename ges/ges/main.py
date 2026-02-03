@@ -181,9 +181,9 @@ def fit(
         if larger than 0, debug are traces printed. Higher values
         correspond to increased verbosity.
     score_based: bool
-        if True, use LGES. Defaults to False.
+        if True, use LGES-0 with SafeInsert. Defaults to False.
     prune: bool
-        if True, use ConservativeInsert. Defaults to False.
+        if True, use LGES-0 with ConservativeInsert. Defaults to False.
     required: np.array
         a matrix of required edges, where A[i,j] = 1 and A[j,i] = 0 implies i -> j
         and A[i,j] = A[j,i] != 0 implies i - j. Defaults to None.
@@ -315,7 +315,42 @@ def fit_interventional(score_class,
     return estimate, metrics
 
 
-def xges_fit(
+def lges_fit_interventional(score_class,
+                       completion_algorithm=None,
+                       A0=None,
+                       phases=["forward", "backward", "turning"],
+                       iterate=False,
+                       debug=0,
+                       prune=False,
+                       score_based=False,
+                       targets=[[]],
+                       required=None,
+                       forbidden=None
+):
+    # First, get observational equivalence class
+    start = time.time()
+    estimate, _ = lges_fit(score_class=score_class[0], # use observational score
+                        completion_algorithm=completion_algorithm,
+                        A0=A0,
+                        phases=phases,
+                        iterate=iterate,
+                        debug=debug,
+                        prune=prune,
+                        score_based=score_based,
+                        required=required,
+                        forbidden=forbidden
+                    )
+    
+    # Then, refine using interventional data
+    estimate = intervention_phase(A=estimate, score_class=score_class, targets=targets)
+
+    end = time.time()
+    metrics = {"time": end - start}
+
+    return estimate, metrics
+
+
+def lges_fit(
     score_class,
     completion_algorithm=None,
     A0=None,
@@ -328,11 +363,9 @@ def xges_fit(
     forbidden=None,
     forbidden_insert=None,
 ):
-    """Run XGES-0 using a user defined score.
-    Prioritize deletions before insertions.
-    Not implemented:
-    1. Restarts
-    2. New Insert/Delete operator implementation
+    """Run LGES using a user defined score.
+    Prioritize deletions before insertions (Nazaret and Blei 2024).
+    If prune and score_based are both False, this runs XGES-0 (Nazaret and Blei 2024) without optimized operators.
 
     Parameters
     ----------
@@ -359,7 +392,7 @@ def xges_fit(
         if larger than 0, debug are traces printed. Higher values
         correspond to increased verbosity.
     score_based: bool
-        if True, use LGES. Defaults to False.
+        if True, use LGES with SafeInsert. Defaults to False.
     prune: bool
         if True, use ConservativeInsert. Defaults to False.
     required: np.array
@@ -497,7 +530,7 @@ def xges_fit(
     return A, metrics
 
 
-def full_xges_fit(
+def lges_plus_fit(
     score_class,
     completion_algorithm=None,
     A0=None,
@@ -509,11 +542,60 @@ def full_xges_fit(
     required=None,
     forbidden=None,
 ):
+    """
+    Run LGES using a user defined score.
+    Prioritize deletions before insertions (Nazaret and Blei 2024).
+    If prune and score_based are both False, this runs Full XGES (Nazaret and Blei 2024) without optimized operators.
+
+    Parameters
+    ----------
+    score_class : ges.DecomposableScore
+        an instance of a class which inherits from
+        ges.decomposable_score.DecomposableScore (or defines a
+        local_score function and a p attribute, see
+        ges.decomposable_score for more info).
+    completion_algorithm : function, optional
+        the "completion algorithm" used to go from PDAG to CPDAG after
+        the application of each operator. If `None`, the algorithm
+        used in the original GES paper is used.
+    A0 : np.array, optional
+        the initial CPDAG on which GES will run, where where A0[i,j]
+        != 0 implies i -> j and A[i,j] != 0 & A[j,i] != 0 implies i -
+        j. Defaults to the empty graph.
+    phases : [{'forward', 'backward', 'turning'}*], optional
+        which phases of the GES procedure are run, and in which
+        order. Defaults to ['forward', 'backward', 'turning'].
+    iterate : bool, default=False
+        Indicates whether the algorithm should repeat the given phases
+        more than once, until the score is not improved.
+    debug : int, optional
+        if larger than 0, debug are traces printed. Higher values
+        correspond to increased verbosity.
+    score_based: bool
+        if True, use LGES+ with SafeInsert. Defaults to False.
+    prune: bool
+        if True, use LGES+ ConservativeInsert. Defaults to False.
+    required: np.array
+        a matrix of required edges, where A[i,j] = 1 and A[j,i] = 0 implies i -> j
+        and A[i,j] = A[j,i] != 0 implies i - j. Defaults to None.
+    forbidden: np.array
+        a matrix of forbidden edges, where A[i,j] = 1 and A[j,i] = 0 implies i -> j
+        and A[i,j] = A[j,i] != 0 implies i - j. Defaults to None.
+
+    Returns
+    -------
+    estimate : np.array
+        the adjacency matrix of the estimated CPDAG
+    metrics : dict
+        a dictionary containing the runtime of the algorithm, the score of the estimate,
+        and metrics about the number of evaluated and actual insertions / deletions / turns
+
+    """
 
     # TODO: fix calculation of metrics. Right now, only time is being calculated accurately.
     start = time.time()
 
-    A, metrics = xges_fit(score_class=score_class,
+    A, metrics = lges_fit(score_class=score_class,
                                  completion_algorithm=completion_algorithm,
                                  A0=A0,
                                  phases=phases,
@@ -552,7 +634,7 @@ def full_xges_fit(
             "  Best operator: delete(%d, %d, %s) -> (%0.4f)" % (x, y, H, score)
         ) if debug else None
 
-        new_A, new_metrics = xges_fit(score_class=score_class,
+        new_A, new_metrics = lges_fit(score_class=score_class,
                     completion_algorithm=completion_algorithm,
                     A0=utils.pdag_to_cpdag(deleted_A),
                     phases=phases,

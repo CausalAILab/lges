@@ -15,7 +15,8 @@ np.random.seed(RANDOM_SEED)
 random.seed(RANDOM_SEED)
 
 NUM_GRAPHS = 50
-NUM_NODES = [10, 20, 30, 40, 50]
+# NUM_NODES = [10, 20, 30, 40, 50]
+NUM_NODES = [50]
 NUM_SAMPLES = [1000]
 FRACTION_CORRECT = [0.0, 0.25, 0.5, 0.75, 1.0]
 DEGREE = 2
@@ -98,9 +99,9 @@ def get_init_mec(true_dag, fraction_correct=1, directed_prob=DIRECTED_PROB, num_
     num_true = np.sum(true_dag)  # Total number of edges in the true DAG
     if num_edges is None:
         # Set num_edges in background knowledge to half of the number of edges in the true DAG
-        num_edges = int(num_true // 2)
+        #  num_edges = int(num_true // 2)
         # Set num_edges in background knowledge to 3/4of the number of edges in the true DAG
-        # num_edges = int(3 * num_true // 4)
+        num_edges = int(3 * num_true // 4)
 
     if num_true == 0:
         print("True DAG is empty. No edges to select.")
@@ -137,7 +138,7 @@ def get_init_mec(true_dag, fraction_correct=1, directed_prob=DIRECTED_PROB, num_
 if __name__ == "__main__":
     
 
-    results_dir = "results_init"
+    results_dir = "results_init/0.75m"
     os.makedirs(results_dir, exist_ok=True)
     # Change the working directory to the results directory
     os.chdir(results_dir)
@@ -146,14 +147,21 @@ if __name__ == "__main__":
     model = "linear-gaussian"
    
     
-    configs = [("Without CIs", "no_init"), # GES without initialization
-                ("Without CIs", "init"),    # GES with initialization
-                ("LGES with CI Score", "no_init"),
+    configs = [("Without CIs", "no_init"),
+                ("Without CIs", "init"),  
+                ("Iterate Without CIs", "init"),  
+                ("LGES with CI Score", "no_init"), 
                 ("LGES Prune With CI Score", "no_init"),
-                ("LGES With CI Score", "init"),    # LGES with safe insert and initialization
-               ("LGES With CI Score", "req"),      # LGES with safe insert and priority insertion
-               ("LGES Prune With CI Score", "init"),    # LGES with safe insert and initialization
-               ("LGES Prune With CI Score", "req")      # LGES with safe insert and priority insertion
+                ("LGES With CI Score", "init"),    
+               ("LGES With CI Score", "req"),     
+               ("LGES Prune With CI Score", "init"),  
+               ("LGES Prune With CI Score", "req"),  
+               ("XGES With CI Score", "no_init"),    
+               ("XGES With CI Score", "init"),   
+               ("XGES With CI Score", "req"),     
+               ("XGES Prune With CI Score", "no_init"),
+               ("XGES Prune With CI Score", "init"),   
+               ("XGES Prune With CI Score", "req")    
                ]
    
     
@@ -222,6 +230,7 @@ if __name__ == "__main__":
 
                         prune = True if "Prune" in ci_type else False
                         score_based = True if "Score" in ci_type else False
+                        iterate = True if "Iterate" in ci_type else False
 
 
                         if init_type == "no_init":
@@ -243,9 +252,23 @@ if __name__ == "__main__":
 
                             # Fit the model with the specified CI setting
                             print(f"Running GES for init {init_type}, ci_type {ci_type}, graph: {i}")
-                            estimate, metrics = ges.fit(score_class, 
-                                                        prune=prune,
-                                                        score_based=score_based,)
+
+                            if "XGES" in ci_type:
+                                if "Full" in ci_type:
+                                    estimate, metrics = ges.lges_plus_fit(score_class, 
+                                                                          prune=prune,
+                                                                          score_based=score_based,
+                                                                          iterate=iterate)
+                                else:                                        
+                                    estimate, metrics = ges.xges_fit(score_class, 
+                                                            prune=prune,
+                                                            score_based=score_based,
+                                                            iterate=iterate)
+                            else:
+                                estimate, metrics = ges.fit(score_class, 
+                                                            prune=prune,
+                                                            score_based=score_based,
+                                                            iterate=iterate)
 
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)
@@ -274,12 +297,29 @@ if __name__ == "__main__":
                                 print(f"Running GES for init {init_type}, ci_type {ci_type}, graph: {i} with initialization fc {fc}")
 
                                 # Fit the model with the specified CI setting
-                                estimate, metrics = ges.fit(score_class, 
-                                                            prune=prune,
-                                                            score_based=score_based,
-                                                            A0=A0 if init_type == "init" else None,
-                                                            required=required if init_type == "req" else None,
-                                                            )
+
+                                if "XGES" in ci_type:
+                                    if "Full" in ci_type:
+                                        estimate, metrics = ges.lges_plus_fit(score_class, 
+                                                                            prune=prune,
+                                                                            score_based=score_based,
+                                                                            iterate=iterate,
+                                                                            A0=A0 if init_type == "init" else None,
+                                                                            required=required if init_type == "req" else None,)
+                                    else:                                        
+                                        estimate, metrics = ges.xges_fit(score_class, 
+                                                                prune=prune,
+                                                                score_based=score_based,
+                                                                iterate=iterate,
+                                                                A0=A0 if init_type == "init" else None,
+                                                                required=required if init_type == "req" else None,)
+                                else:
+                                    estimate, metrics = ges.fit(score_class, 
+                                                                prune=prune,
+                                                                score_based=score_based,
+                                                                iterate=iterate,
+                                                                A0=A0 if init_type == "init" else None,
+                                                                required=required if init_type == "req" else None,)
 
                                 # Save the estimate and metrics to a file
                                 np.save(estimate_file_path, estimate)

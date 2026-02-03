@@ -1,4 +1,6 @@
 **/__pycache__/
 start.sh
+src/experiments/obs/results/
+src/experiments/exp/results/
 .repair/
 results.txt

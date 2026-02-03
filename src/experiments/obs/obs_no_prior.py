@@ -101,6 +101,8 @@ def run_obs_baselines(data, trial_dir, trial_num):
             G = G.astype(int)
             estimate = utils.dag_to_cpdag(G)
             metrics = {"time": end - start}
+        elif baseline == "xges_original":
+            pass
 
         np.save(estimate_file_path, estimate)
         with open(metrics_file_path, "w") as metrics_file:
@@ -113,7 +115,7 @@ if __name__ == "__main__":
     # Parse command-line arguments for experimental parameters
     parser = argparse.ArgumentParser(description="Run experiments with specified parameters.")
     parser.add_argument("-p", "--num_vars", type=str, help=f"Size of graphs for the experiment (options: {', '.join(num_vars_list.keys())} or a single integer). Default: medium.")
-    parser.add_argument("-n", "--num_samples", type=str, help=f"Size of sample for the experiment (options: {', '.join(num_samples_list.keys())} or a single integer). Default: medium.")
+    parser.add_argument("-n", "--num_samples", type=str, default=NUM_SAMPLES, help=f"Size of sample for the experiment (options: {', '.join(num_samples_list.keys())} or a single integer). Default: {NUM_SAMPLES}.")
     parser.add_argument("-d", "--avg_degree", type=str, help=f"Graph degree for the experiment (options: {', '.join(avg_degree_list.keys())} or a single float). Default: 2.0.")
     parser.add_argument("-g", "--num_graphs", type=int, default=NUM_GRAPHS, help=f"Number of graphs for the experiment (default: {NUM_GRAPHS}).")
     parser.add_argument("-m", "--model", choices=["multinomial", "linear-gaussian"], default="linear-gaussian", help="Model type for data generation (options: multinomial, linear-gaussian). Default: linear-gaussian.")
@@ -138,17 +140,25 @@ if __name__ == "__main__":
     num_graphs = args.num_graphs
     model = args.model
     run_baselines = args.run_baselines
-
-
     if run_baselines:
-        settings = ["Without CIs", # Standard GES 
-                    "XGES Without CIs", # XGES-0 with deletes before reversals before inserts
-                    "LGES With CI Score", # LGES with SafeInsert
-                    "LGES Prune With CI Score", # LGES with ConservativeInsert
+        settings = [
+                    # "Without CIs", # Standard GES 
+                    # "Iterate Without CIs", #  GES with Repeats
+                    # "XGES Without CIs", # XGES-0 with deletes before reversals before inserts
+                    # "XGES With CI Score", # XGES-0 with SafeInsert
+                    # "XGES Prune With CI Score", # XGES-0 with ConservativeInsert
+                    # "Full XGES Without CIs", # XGES-0 with deletes before reversals before inserts
+                    # "Full XGES With CI Score", # XGES-0 with SafeInsert
+                    # "Full XGES Prune With CI Score", # XGES-0 with ConservativeInsert
+                    # "LGES With CI Score", # LGES with SafeInsert
+                    # "LGES Prune With CI Score", # LGES with ConservativeInsert
+                    # "Iterate LGES With CI Score", # LGES with SafeInsert
+                    # "Iterate LGES Prune With CI Score", # LGES with ConservativeInsert
+                    
         ]
     else:
-        settings = ["LGES With CI Score", # LGES with SafeInsert
-                    "LGES Prune With CI Score", # LGES with ConservativeInsert
+        settings = ["XGES With CI Score", # LGES with SafeInsert
+                    "XGES Prune With CI Score", # LGES with ConservativeInsert
         ]
 
     
@@ -244,17 +254,26 @@ if __name__ == "__main__":
                             print(f"Fitting model for setting: {setting}, graph: {i}")
                             prune = True if "Prune" in setting else False
                             score_based = True if "Score" in setting else False
+                            iterate = True if "Iterate" in setting else False
                             if prune:
                                 print("pruning is enabled in obs_no_prior")
                             
                             if "XGES" in setting:
-                                estimate, metrics = ges.xges_fit(score_class, 
-                                                        prune=prune,
-                                                        score_based=score_based,)
+                                if "Full" in setting:
+                                    estimate, metrics = ges.lges_plus_fit(score_class, 
+                                                                          prune=prune,
+                                                                          score_based=score_based,
+                                                                          iterate=iterate)
+                                else:                                        
+                                    estimate, metrics = ges.lges_fit(score_class, 
+                                                            prune=prune,
+                                                            score_based=score_based,
+                                                            iterate=iterate)
                             else:
                                 estimate, metrics = ges.fit(score_class, 
                                                             prune=prune,
-                                                            score_based=score_based,)
+                                                            score_based=score_based,
+                                                            iterate=iterate)
                             
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)

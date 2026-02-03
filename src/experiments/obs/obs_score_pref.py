@@ -15,7 +15,6 @@ G = np.array([
 ])
 
 
-
 # compare graphs
 # A: X1 -> Z, Z -> Y
 
@@ -37,9 +36,9 @@ adj_B = np.array([
 # C: X1 -> Y, Y -> Z
 adj_C = np.array([
     [0, 0, 0, 1],  # X1 -> Y
-    [0, 0, 1, 0],  # Y -> Z
+    [0, 0, 0, 0],  # Z
     [0, 0, 0, 0],  # X2
-    [0, 0, 0, 0]   # Y
+    [0, 1, 0, 0]   # Y -> Z
 ])
 
 
@@ -54,12 +53,11 @@ count_C_highest = 0
 
 for i in range(100):
     W = G * np.random.choice([-1, 1], size=G.shape) * np.random.uniform(0.5, 2, G.shape)
-    # sample noise means from N(0, 1)
     noise_means = np.zeros(G.shape[0])
     # sample noise variances from U(0.1, 0.5)
     noise_variances = np.random.uniform(0.1, 0.5, size=G.shape[0])
     sampler = sempler.LGANM(W, noise_means, noise_variances, random_state=i)
-    data = sampler.sample(n=1000)
+    data = sampler.sample(n=100)
     score_class = ges.GaussObsL0Pen(data)
     score_A = score_class.full_score(adj_A)
     score_B = score_class.full_score(adj_B)

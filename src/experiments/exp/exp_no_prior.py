@@ -4,12 +4,12 @@
 import random
 import numpy as np
 import ges.ges as ges
+import gies.gies as gies
 from src.experiments.utils import RANDOM_SEED, get_random_dag, get_random_data
 import ges.ges.utils as utils
 import argparse
 import os
 import json
-import gies
 import time
 import pickle
 from sempler.generators import dag_avg_deg
@@ -184,7 +184,16 @@ if __name__ == "__main__":
                         elif model == "multinomial":
                             score_class = [ges.scores.GaussObsL0Pen(data[i]) for i in range(len(data))]
                     
-                        algs = ["lges_prune", "lges", "gies"]
+                        algs = ["lges_prune",  #lges-0 (cons) + iorient
+                                "lges", # lges-0 (safe) + iorient
+                                "xlges", # lges (safe) + iorient
+                                "xlges_prune", # lges (cons) + iorient
+                                "gies",  # gies
+                                "lgies_prune", # gies + cons insert
+                                "lgies", # gies + safeinsert
+                                "xlgies", # lgies (safe)
+                                "xlgies_prune", # lgies (cons)
+                                ] 
                         for alg in algs:
 
                             metrics_file_path = os.path.join(trial_dir, f"metrics_{alg}_{i}.json")
@@ -202,24 +211,31 @@ if __name__ == "__main__":
                                 continue
 
 
-                            if alg == "gies":
-                                start = time.time()
-                                estimate, score = gies.fit_bic(data, targets)
-                                end = time.time()
-                                metrics = {"time": end - start}
-                            else: # lges
-                                # fit ges with SafeInsert Heuristic
-                                if "prune" in alg:
-                                    estimate, metrics = ges.fit_interventional(score_class=score_class,
-                                                                            score_based = True, # LGES  
-                                                                            prune=True, # ConservativeInsert
+                            prune = "prune" in alg
+                            score_based = ("lges" in alg) or ("lgies" in alg)
+                            start = time.time()
+
+                            if "ges" in alg:
+                                # obs + iorient
+                                if "xl" in alg:
+                                    # xges+lges 
+                                    estimate, metrics = ges.lges_fit_interventional(score_class=score_class,
+                                                                            score_based=score_based, 
+                                                                            prune=prune, 
                                                                             targets=targets)
                                 else:
                                     estimate, metrics = ges.fit_interventional(score_class=score_class,
-                                                                            score_based = True, # LGES 
-                                                                            prune=False, # SafeInsert
+                                                                            score_based=score_based,
+                                                                            prune=prune,
                                                                             targets=targets)
-
+                            else:
+                                # gies 
+                                if "xl" in alg:
+                                    # lges with insertions before deletions heuristic
+                                    estimate, _, metrics = gies.xlgies_fit_bic(data, targets, score_based=score_based, prune=prune)
+                                else:
+                                    # lges-0
+                                    estimate, _, metrics = gies.fit_bic(data, targets, score_based=score_based, prune=prune)
                             
                             # Save the estimate and metrics to a file
                             np.save(estimate_file_path, estimate)
