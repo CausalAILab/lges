@@ -6,8 +6,14 @@ Quick-start demo: GES vs. LGES (SafeInsert) vs. LGES (ConservativeInsert) on a 1
 • Simulates 1000 linear-Gaussian samples
 • Fits:
     1.   GES                  (score_based = False, prune = False)
-    2.   LGES-SafeInsert      (score_based = True , prune = False)
-    3.   LGES-Conservative    (score_based = True , prune = True)
+    2.   LGES0-SafeInsert      (score_based = True , prune = False)
+    3.   LGES0-Conservative    (score_based = True , prune = True)
+    4.   XGES-0                  (score_based = False, prune = False)
+    5.   LGES-SafeInsert      (score_based = True , prune = False)
+    6.   LGES-Conservative    (score_based = True , prune = True)
+    7.   XGES                  (score_based = False, prune = False)
+    8.   LGES+-SafeInsert      (score_based = True , prune = False)
+    9.   LGES+-Conservative    (score_based = True , prune = True)
 • Prints Structural Hamming Distance (SHD) and runtime for each estimate.
 """
 
@@ -38,20 +44,57 @@ score = ges.scores.GaussObsL0Pen(data)
 estimates = {}
 runtimes = {}
 
+# -- LGES-0 variants -- 
 estimates["GES"], metrics = ges.fit(score,
-                              score_based=False,   # use CI tests
+                              score_based=False,   
                               prune=False)
 runtimes["GES"] = metrics["time"]
 
-estimates["LGES-Safe"], metrics = ges.fit(score,
-                                    score_based=True,   # score-based insertions
-                                    prune=False)        # SafeInsert by default
+estimates["LGES0-Safe"], metrics = ges.fit(score,
+                                    score_based=True,   
+                                    prune=False)        # SafeInsert 
+runtimes["LGES0-Safe"] = metrics["time"]
+
+estimates["LGES0-Cons"], metrics = ges.fit(score,
+                                    score_based=True,
+                                    prune=True)         # ConservativeInsert
+runtimes["LGES0-Cons"] = metrics["time"]
+
+
+# -- LGES variants -- 
+
+estimates["XGES0"], metrics = ges.lges_fit(score,
+                              score_based=False,  
+                              prune=False)
+runtimes["XGES0"] = metrics["time"]
+
+estimates["LGES-Safe"], metrics = ges.lges_fit(score,
+                                    score_based=True,   
+                                    prune=False)        # SafeInsert 
 runtimes["LGES-Safe"] = metrics["time"]
 
-estimates["LGES-Cons"], metrics = ges.fit(score,
+estimates["LGES-Cons"], metrics = ges.lges_fit(score,
                                     score_based=True,
                                     prune=True)         # ConservativeInsert
 runtimes["LGES-Cons"] = metrics["time"]
+
+
+# -- LGES+ variants -- 
+
+estimates["XGES"], metrics = ges.lges_plus_fit(score,
+                              score_based=False,   
+                              prune=False)
+runtimes["XGES"] = metrics["time"]
+
+estimates["LGES+-Safe"], metrics = ges.lges_plus_fit(score,
+                                    score_based=True,   # SafeInsert
+                                    prune=False)        
+runtimes["LGES+-Safe"] = metrics["time"]
+
+estimates["LGES+-Cons"], metrics = ges.lges_plus_fit(score,
+                                    score_based=True, 
+                                    prune=True)         # ConservativeInsert
+runtimes["LGES+-Cons"] = metrics["time"]
 
 
 
