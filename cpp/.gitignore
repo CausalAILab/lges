@@ -1,0 +1,14 @@
+/cmake-build-debug/
+/.idea/
+/build/
+/compile_commands.json
+/.cache/
+__pycache__/
+
+.DS_Store
+*.py[cod]
+/.venv/
+/build-*/
+/experiments/results/
+/xges-graph.txt
+/xges-stats.txt

@@ -1,0 +1,4 @@
+# Fixture generation and experiment tests; the C++/CLI tests need no Python packages.
+numpy>=1.26,<3
+# Only required for plotting the saved experiment results.
+matplotlib>=3.8,<4
