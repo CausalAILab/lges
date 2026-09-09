@@ -15,6 +15,7 @@ Disclaimer: This code is offered publicly with the MIT License, meaning that oth
 ```
 LGES/
 ├── ges 
+├── cpp/                # C++ observational search subproject
 ├── src/
 │   └── experiments/
 │       ├── obs/        
@@ -36,6 +37,32 @@ Make sure you have Python 3.8+ and the required dependencies installed.
 ```bash
 pip install -r requirements.txt
 ```
+---
+
+## C++ observational search
+
+An optional C++ implementation is available in [`cpp/`](cpp/README.md). It is based
+on the original [XGES C++ code](https://github.com/ANazaret/XGES) and adds the
+observational LGES-0, LGES and LGES+ schedules with Safe/Conservative insertion.
+It supports Gaussian BIC scoring and CPDAG output. Prior-knowledge and
+interventional search remain features of the Python implementation.
+
+From this repository root:
+
+```bash
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp/build --parallel
+./cpp/build/src-cpp/xges --input data.npy --baseline lges \
+    --insert conservative --strict-lges --alpha 1
+```
+
+See the [C++ README](cpp/README.md) for dependencies, tests, experiment commands,
+source attribution, and known differences from the paper algorithms. The C++
+experiment helpers find this repository's graph utilities automatically. The
+C++ subproject has its own dependency requirements and does not require installing
+the full Python experiment environment. spdlog is fetched at a pinned revision
+by CMake; no additional Git submodule initialization is required.
+
 ---
 
 ## Running Experiments

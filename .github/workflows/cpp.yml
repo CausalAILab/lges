@@ -1,0 +1,37 @@
+name: C++ subproject
+
+on:
+  push:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/cpp.yml'
+  pull_request:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/cpp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeigen3-dev libboost-dev libblas-dev ninja-build
+          python -m pip install -r cpp/requirements-dev.txt
+      - name: Configure and build from the repository root
+        run: |
+          cmake -S cpp -B "$RUNNER_TEMP/cpp-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$(command -v python)"
+          cmake --build "$RUNNER_TEMP/cpp-build" --parallel 2
+      - name: Run regression suites
+        run: ctest --test-dir "$RUNNER_TEMP/cpp-build" --output-on-failure
+      - name: Run the strict LGES CLI
+        run: |
+          "$RUNNER_TEMP/cpp-build/src-cpp/xges" --input cpp/tests/fixtures/undirected_chain.npy --baseline lges+ --insert conservative --strict-lges --alpha 1 --output "$RUNNER_TEMP/graph.csv" --stats "$RUNNER_TEMP/stats.csv" -v0

@@ -1,0 +1,17 @@
+{
+  "cases": {
+    "conservative_refresh": {
+      "n": 150,
+      "p": 20,
+      "seed": 7004,
+      "sha256": "518a142676c3f4274924212a94739bae686c61319aafeb38bb6be310df56f6d7"
+    },
+    "safe_refresh": {
+      "n": 50,
+      "p": 12,
+      "seed": 7012,
+      "sha256": "959c5f5ac39d4ad66ae99efebd786e645fbefbe01ed5596624b0505803fca686"
+    }
+  },
+  "numpy": "2.4.6"
+}
